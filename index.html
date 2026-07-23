@@ -195,6 +195,7 @@
         font-size: 12px;
         font-weight: 600;
       }
+      .day.weekend .daynum { color:#d9364f; }
       .event {
         font-size: 10px;
         margin-top: 4px;
@@ -213,6 +214,16 @@
       .month-pickers select { width:auto; min-width:120px; font-weight:600; }
       .dashboard-strip { display:grid; grid-template-columns:repeat(5,minmax(130px,1fr)); gap:10px; margin-bottom:18px; }
       .dashboard-strip .stat { min-height:82px; }
+      .dashboard-strip .stat:nth-child(1) { background:#e7e2ff; border-color:#d5ccff; }
+      .dashboard-strip .stat:nth-child(2) { background:#d9f4e8; border-color:#bfe9d8; }
+      .dashboard-strip .stat:nth-child(3) { background:#fff0c7; border-color:#ffe39a; }
+      .dashboard-strip .stat:nth-child(4) { background:#dceeff; border-color:#c4e1fb; }
+      .dashboard-strip .stat:nth-child(5) { background:#ffdfe9; border-color:#ffc8d9; }
+      .detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 18px; margin-top:14px; }
+      .detail-item { background:#f8f8ff; border:1px solid #eceafa; border-radius:13px; padding:10px 12px; }
+      .detail-item.full { grid-column:1/-1; }
+      .detail-label { display:block; color:#738096; font-size:12px; margin-bottom:3px; }
+      .detail-value { font-weight:500; overflow-wrap:anywhere; }
       .data-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:12px 0; }
       .data-controls input { flex:1 1 220px; }
       .data-controls select { width:auto; min-width:115px; }
@@ -366,6 +377,8 @@
           gap: 2px;
         }
         .dashboard-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .detail-grid { grid-template-columns:1fr; }
+        .detail-item.full { grid-column:auto; }
         .calendar-head { flex-wrap:wrap; }
         .month-pickers { order:-1; width:100%; justify-content:center; }
         .month-pickers select { min-width:0; flex:1; }
@@ -444,7 +457,9 @@
             </div>
             <div class="full">
               <label class="req">เลือกอุปกรณ์</label>
-              <div class="equipment-list" id="equipment"></div>
+              <select id="equipment" name="equipmentIds" required>
+                <option value="">กรุณาเลือกวันเวลารับ–คืนก่อน</option>
+              </select>
             </div>
             <div class="full">
               <label>หมายเหตุ</label><textarea name="note"></textarea>
@@ -499,16 +514,14 @@
               </div>
             </div>
             <div class="admin-tabs" id="adminTabs">
-              <button class="btn active" data-admin="dashboard">📊 Dashboard</button>
-              <button class="btn" data-admin="requests">📋 คำขอยืม</button>
+              <button class="btn active" data-admin="requests">📋 คำขอยืม</button>
               <button class="btn admin-only" data-admin="equipment">💻 อุปกรณ์</button>
               <button class="btn admin-only" data-admin="departments">🏢 หน่วยงาน</button>
               <button class="btn admin-only" data-admin="users">👥 ผู้ใช้งาน</button>
               <button class="btn admin-only" data-admin="settings">⚙️ ตั้งค่าระบบ</button>
               <button class="btn admin-only" data-admin="logs">🕘 ประวัติ</button>
             </div>
-            <div id="admin-dashboard" class="admin-panel active"><div id="adminStats" class="stats"></div></div>
-            <div id="admin-requests" class="admin-panel"><div id="adminResults"></div></div>
+            <div id="admin-requests" class="admin-panel active"><div id="adminResults"></div></div>
             <div id="admin-equipment" class="admin-panel"><div class="toolbar"><button class="btn primary" onclick="equipmentForm()">＋ เพิ่มอุปกรณ์</button></div><div id="equipmentAdmin"></div></div>
             <div id="admin-departments" class="admin-panel"><div class="toolbar"><button class="btn primary" onclick="departmentForm()">＋ เพิ่มหน่วยงาน</button></div><div id="departmentAdmin"></div></div>
             <div id="admin-users" class="admin-panel"><div class="toolbar"><button class="btn primary" onclick="userForm()">＋ เพิ่มผู้ใช้งาน</button></div><div id="userAdmin"></div></div>
@@ -651,7 +664,10 @@
         renderAvailableEquipment([]);
         refreshUser();
         loadCalendar();
+        setBorrowDateMinimums();
       }
+      function localDateTimeValue(d=new Date()){const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
+      function setBorrowDateMinimums(){const form=$("#bookingForm"),now=localDateTimeValue();form.elements.borrowDateTime.min=now;form.elements.returnDateTime.min=now;}
       async function loadCalendar() {
         let a = new Date(month.getFullYear(), month.getMonth(), 1),
           b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
@@ -694,7 +710,7 @@
               d <= new Date(b.getFullYear(), b.getMonth(), b.getDate())
             );
           });
-          html += `<div class="day ${d.getMonth() !== month.getMonth() ? "muted" : ""}"><div class="daynum">${d.getDate()}</div>${ev
+          html += `<div class="day ${d.getMonth() !== month.getMonth() ? "muted" : ""} ${d.getDay()===0||d.getDay()===6?"weekend":""}"><div class="daynum">${d.getDate()}</div>${ev
             .slice(0, 4)
             .map(
               (e) =>
@@ -726,9 +742,15 @@
       function showEvent(raw) {
         let e = JSON.parse(raw);
         $("#detail").innerHTML =
-          `<h2 class="title">${esc(e.equipment||e.title)}</h2><p>${badge(e.status)}</p><p><b>เลขที่คำขอ:</b> ${esc(e.id)}</p><p><b>รหัสทรัพย์สิน:</b> ${esc(e.assetCode||"-")}</p><p><b>ผู้ยืม:</b> ${esc(e.borrower)}</p><p><b>หน่วยงาน:</b> ${esc(e.department||"-")} · <b>โทร:</b> ${esc(e.phone||"-")}</p><p><b>ตั้งแต่:</b> ${fmt(e.start)}<br><b>ถึง:</b> ${fmt(e.end)}</p><p><b>สถานที่ใช้:</b> ${esc(e.location||"-")}</p><p><b>วัตถุประสงค์:</b> ${esc(e.purpose || "-")}</p>`;
+          `<h2 class="title">${esc(e.equipment||e.title)}</h2>${badge(e.status)}<div class="detail-grid">
+          ${detailItem("เลขที่คำขอ",e.id)}${detailItem("รหัสทรัพย์สิน",e.assetCode||"-")}
+          ${detailItem("ผู้ยืม",e.borrower)}${detailItem("หน่วยงาน",e.department||"-")}
+          ${detailItem("เบอร์ติดต่อ",e.phone||"-")}${detailItem("สถานที่ใช้",e.location||"-")}
+          ${detailItem("เริ่มยืม",fmt(e.start))}${detailItem("สิ้นสุดการยืม",fmt(e.end))}
+          ${detailItem("วัตถุประสงค์",e.purpose||"-",true)}</div>`;
         $("#detailModal").style.display = "flex";
       }
+      function detailItem(label,value,full=false){return `<div class="detail-item ${full?"full":""}"><span class="detail-label">${esc(label)}</span><span class="detail-value">${esc(value)}</span></div>`;}
       function closeModal() {
         $("#detailModal").style.display = "none";
       }
@@ -736,9 +758,11 @@
         e.preventDefault();
         let f = new FormData(e.target),
           file = f.get("attachment"),
-          ids = f.getAll("equipmentIds");
-        if (!ids.length)
-          return notice("กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ", "warning");
+          ids = f.getAll("equipmentIds").filter(Boolean);
+        if (ids.length !== 1)
+          return notice("กรุณาเลือกอุปกรณ์ 1 รายการ", "warning");
+        if(new Date(f.get("borrowDateTime"))<new Date())
+          return notice("ไม่สามารถยื่นคำขอยืมย้อนหลังได้", "warning");
         let attachment = null;
         if (file && file.size) {
           if (file.size > 5 * 1024 * 1024)
@@ -755,8 +779,10 @@
         let r = await server("createBooking", p);
         await notice("เลขที่คำขอ " + r.id, "success", "ส่งคำขอสำเร็จ");
         e.target.reset();
+        setBorrowDateMinimums();
+        await refreshInitialData();
         month = new Date(p.borrowDateTime);
-        loadCalendar();
+        await loadCalendar();
       };
       async function refreshAvailableEquipment(){
         const form=$("#bookingForm"),a=form.elements.borrowDateTime.value,b=form.elements.returnDateTime.value;
@@ -768,9 +794,10 @@
       $("#bookingForm").elements.borrowDateTime.addEventListener("change",refreshAvailableEquipment);
       $("#bookingForm").elements.returnDateTime.addEventListener("change",refreshAvailableEquipment);
       function renderAvailableEquipment(list,invalid){
-        const source=list.length?list:(invalid?[]:DATA.equipment);
-        $("#equipment").innerHTML=source.map(e=>`<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code||e.equipment_id)} · ${esc(e.category||"")}</span></label>`).join("")||
-          `<div class="empty">${invalid?"กรุณาเลือกวันเวลาคืนให้มากกว่าวันเวลารับ":"ไม่มีอุปกรณ์ว่างในช่วงเวลานี้"}</div>`;
+        const form=$("#bookingForm"),hasRange=form.elements.borrowDateTime.value&&form.elements.returnDateTime.value;
+        const source=hasRange&&!invalid?list:[];
+        $("#equipment").innerHTML=`<option value="">${invalid?"กรุณาเลือกวันเวลาคืนให้มากกว่าวันเวลารับ":!hasRange?"กรุณาเลือกวันเวลารับ–คืนก่อน":source.length?"เลือกอุปกรณ์":"ไม่มีอุปกรณ์ว่างในช่วงเวลานี้"}</option>`+
+          source.map(e=>`<option value="${esc(e.equipment_id)}">${esc(e.equipment_name)}</option>`).join("");
       }
       function dataUrl(f) {
         return new Promise((ok) => {
@@ -850,8 +877,8 @@
         let note=ask.value||"";
         await server("changeStatus", token, id, s, note);
         await notice("อัปเดตสถานะของ "+id+" แล้ว");
-        loadAdmin();
-        loadCalendar();
+        await reloadAdminAndPublic();
+        await loadCalendar();
       }
       async function openPassword() {
         const r=await Swal.fire({
@@ -868,10 +895,6 @@
       }
       function renderAdmin(){
         const s=ADMIN.summary||{};
-        $("#adminStats").innerHTML=[
-          ["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],
-          ["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังถูกยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]
-        ].map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join("");
         if(ADMIN.role!=="ADMIN")return;
         renderEquipmentAdmin();renderDepartmentAdmin();renderUserAdmin();renderSettings();renderLogs();
         setTimeout(enhanceAdminTables,0);
@@ -951,7 +974,7 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function reloadAdminAndPublic(){await loadAdmin();DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");$("#equipment").innerHTML=DATA.equipment.map(e=>`<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code||e.equipment_id)} · ${esc(e.category||"")}</span></label>`).join("")||'<div class="empty">ยังไม่มีอุปกรณ์ที่เปิดใช้งาน</div>';}
+      async function refreshInitialData(){DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;renderPublicDashboard();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function renderPublicDashboard(){
         const s=DATA.summary||{};
         const cards=[["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]];
@@ -973,7 +996,7 @@
       function downloadCsv(name,rows){if(!rows.length)return notice("ไม่มีข้อมูลสำหรับส่งออก","warning");const keys=Object.keys(rows[0]).filter(k=>typeof rows[0][k]!=="object"),cell=v=>`"${String(v??"").replaceAll('"','""')}"`,csv="\uFEFF"+keys.map(cell).join(",")+"\n"+rows.map(r=>keys.map(k=>cell(r[k])).join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
       function enhanceAdminTables(){
         ["admin-equipment","admin-departments","admin-users","admin-logs"].forEach(id=>{const panel=$("#"+id),table=panel&&panel.querySelector("table");if(!table||panel.querySelector(".data-controls"))return;const rows=[...table.tBodies[0].rows],controls=document.createElement("div");controls.className="data-controls";controls.innerHTML='<input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select><option>10</option><option>20</option><option>50</option><option>100</option></select><button class="btn">ส่งออก CSV</button>';panel.insertBefore(controls,panel.querySelector(".table-wrap"));const [q,sort,size,btn]=controls.children;function apply(){const list=rows.filter(r=>r.innerText.toLowerCase().includes(q.value.toLowerCase()));list.sort((a,b)=>a.rowIndex-b.rowIndex);if(sort.value==="desc")list.reverse();rows.forEach(r=>r.style.display="none");list.slice(0,+size.value).forEach(r=>{r.style.display="";table.tBodies[0].appendChild(r)})}q.oninput=sort.onchange=size.onchange=apply;btn.onclick=()=>downloadCsv(id+".csv",rows.filter(r=>r.style.display!=="none").map(r=>Object.fromEntries([...r.cells].map((c,i)=>["คอลัมน์ "+(i+1),c.innerText]))));apply()})}
-      async function reloadAdminAndPublic(){await loadAdmin();DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;renderPublicDashboard();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function reloadAdminAndPublic(){await loadAdmin();await refreshInitialData();}
       function esc(v) {
         return String(v ?? "").replace(
           /[&<>'"]/g,
