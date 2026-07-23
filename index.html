@@ -1,1 +1,773 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #405064;
+        --lav: #dcd7ff;
+        --mint: #ccefe4;
+        --pink: #ffd9e7;
+        --blue: #d7eaff;
+        --yellow: #fff0bd;
+        --bg: #f8f8ff;
+        --white: #fff;
+        --danger: #ff91aa;
+        --shadow: 0 10px 30px rgba(95, 89, 140, 0.11);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #f9f7ff, #f2fbf8);
+        color: var(--ink);
+        font-family: Prompt, sans-serif;
+      }
+      .top {
+        padding: 22px max(18px, 5vw);
+        background: linear-gradient(100deg, #dcd7ff, #ccefe4, #ffd9e7);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .brand {
+        font-size: clamp(20px, 3vw, 30px);
+        font-weight: 600;
+      }
+      .sub {
+        font-size: 13px;
+        opacity: 0.8;
+      }
+      .nav {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 14px max(18px, 5vw);
+        position: sticky;
+        top: 0;
+        background: #ffffffdd;
+        backdrop-filter: blur(10px);
+        z-index: 5;
+        box-shadow: 0 3px 16px #9b95bd19;
+      }
+      .nav button,
+      .btn {
+        border: 0;
+        border-radius: 14px;
+        padding: 10px 16px;
+        font: inherit;
+        color: var(--ink);
+        cursor: pointer;
+        background: var(--blue);
+      }
+      .nav button.active {
+        background: var(--lav);
+        font-weight: 600;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 22px auto;
+        padding: 0 18px;
+      }
+      .page {
+        display: none;
+      }
+      .page.active {
+        display: block;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #ffffff;
+        border-radius: 22px;
+        padding: 22px;
+        box-shadow: var(--shadow);
+        margin-bottom: 18px;
+      }
+      .title {
+        font-size: 21px;
+        font-weight: 600;
+        margin: 0 0 16px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .full {
+        grid-column: 1/-1;
+      }
+      label {
+        font-size: 13px;
+        font-weight: 500;
+        display: block;
+        margin-bottom: 6px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid #e4e3f1;
+        border-radius: 12px;
+        padding: 11px 12px;
+        font: inherit;
+        background: #fcfcff;
+        color: var(--ink);
+        outline: none;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: #a9a1eb;
+        box-shadow: 0 0 0 3px #dcd7ff66;
+      }
+      textarea {
+        min-height: 90px;
+      }
+      .req:after {
+        content: " *";
+        color: #f27c9c;
+      }
+      .equipment-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .eq {
+        border: 1px solid #e5e3f5;
+        border-radius: 15px;
+        padding: 12px;
+        background: #fafaff;
+      }
+      .eq input {
+        width: auto;
+        margin-right: 8px;
+      }
+      .primary {
+        background: linear-gradient(90deg, #bcb4ff, #9edfcf);
+        font-weight: 600;
+      }
+      .danger {
+        background: var(--pink);
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .calendar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 15px;
+      }
+      .calendar {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+      }
+      .dow {
+        text-align: center;
+        font-weight: 600;
+        font-size: 13px;
+        padding: 8px;
+      }
+      .day {
+        min-height: 110px;
+        border: 1px solid #eeecf6;
+        border-radius: 12px;
+        padding: 7px;
+        background: #fff;
+      }
+      .day.muted {
+        opacity: 0.35;
+      }
+      .daynum {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .event {
+        font-size: 10px;
+        margin-top: 4px;
+        border-radius: 7px;
+        padding: 4px 5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+      }
+      .s-wait {
+        background: var(--yellow);
+      }
+      .s-ok {
+        background: var(--mint);
+      }
+      .s-out {
+        background: var(--blue);
+      }
+      .s-done {
+        background: #e7e9ed;
+      }
+      .s-no {
+        background: var(--pink);
+      }
+      .table-wrap {
+        overflow: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 880px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px;
+        border-bottom: 1px solid #eeedf5;
+        font-size: 13px;
+      }
+      th {
+        background: #f2f0ff;
+      }
+      .badge {
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        display: inline-block;
+      }
+      .login {
+        max-width: 430px;
+        margin: 35px auto;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .toolbar input {
+        max-width: 330px;
+      }
+      .toast {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        background: #fff;
+        border-radius: 15px;
+        padding: 14px 18px;
+        box-shadow: var(--shadow);
+        z-index: 20;
+        display: none;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: #59617666;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 15;
+        padding: 20px;
+      }
+      .modal .card {
+        max-width: 560px;
+        width: 100%;
+        max-height: 90vh;
+        overflow: auto;
+      }
+      .empty {
+        text-align: center;
+        padding: 30px;
+        color: #8993a1;
+      }
+      .spinner {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #ffffff99;
+        z-index: 99;
+        place-items: center;
+        font-weight: 600;
+      }
+      @media (max-width: 700px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .day {
+          min-height: 75px;
+          padding: 4px;
+        }
+        .event {
+          font-size: 0;
+        }
+        .event:after {
+          content: "•";
+          font-size: 16px;
+        }
+        .top {
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .calendar {
+          gap: 2px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="spinner" id="spin">กำลังดำเนินการ...</div>
+    <header class="top">
+      <div>
+        <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿</div>
+      </div>
+      <div id="who"></div>
+    </header>
+    <nav class="nav">
+      <button data-page="calendar" class="active">📅 ปฏิทิน</button
+      ><button data-page="booking">✨ ยื่นคำขอ</button
+      ><button data-page="status">🔎 ตรวจสอบสถานะ</button
+      ><button data-page="admin">🔐 เจ้าหน้าที่</button>
+    </nav>
+    <main class="wrap">
+      <section id="calendar" class="page active">
+        <div class="card">
+          <div class="calendar-head">
+            <button class="btn" onclick="moveMonth(-1)">‹ ก่อนหน้า</button>
+            <h2 class="title" id="monthLabel"></h2>
+            <button class="btn" onclick="moveMonth(1)">ถัดไป ›</button>
+          </div>
+          <div class="calendar" id="cal"></div>
+        </div>
+      </section>
+      <section id="booking" class="page">
+        <form class="card" id="bookingForm">
+          <h2 class="title">แบบฟอร์มขอยืมอุปกรณ์</h2>
+          <div class="grid">
+            <div>
+              <label class="req">ชื่อ–นามสกุล</label
+              ><input name="borrowerName" required />
+            </div>
+            <div><label>ตำแหน่ง</label><input name="position" /></div>
+            <div>
+              <label class="req">หน่วยงาน/แผนก</label
+              ><select name="department" id="department" required></select>
+            </div>
+            <div>
+              <label class="req">เบอร์ติดต่อ</label
+              ><input name="phone" required />
+            </div>
+            <div><label>อีเมล</label><input type="email" name="email" /></div>
+            <div>
+              <label class="req">สถานที่ใช้งาน</label
+              ><input name="location" required />
+            </div>
+            <div>
+              <label class="req">วันเวลารับ</label
+              ><input type="datetime-local" name="borrowDateTime" required />
+            </div>
+            <div>
+              <label class="req">วันเวลาคืน</label
+              ><input type="datetime-local" name="returnDateTime" required />
+            </div>
+            <div class="full">
+              <label class="req">วัตถุประสงค์</label
+              ><textarea name="purpose" required></textarea>
+            </div>
+            <div class="full">
+              <label class="req">เลือกอุปกรณ์</label>
+              <div class="equipment-list" id="equipment"></div>
+            </div>
+            <div class="full">
+              <label>หมายเหตุ</label><textarea name="note"></textarea>
+            </div>
+            <div class="full">
+              <label>ไฟล์แนบ (ไม่เกิน 5 MB)</label
+              ><input type="file" name="attachment" />
+            </div>
+          </div>
+          <div class="actions">
+            <button type="reset" class="btn">ล้างข้อมูล</button
+            ><button class="btn primary">ส่งคำขอยืม</button>
+          </div>
+        </form>
+      </section>
+      <section id="status" class="page">
+        <div class="card">
+          <h2 class="title">ตรวจสอบสถานะคำขอ</h2>
+          <div class="toolbar">
+            <input
+              id="searchQ"
+              placeholder="เลขที่คำขอ ชื่อ เบอร์โทร หรือแผนก"
+            /><button class="btn primary" onclick="search()">ค้นหา</button>
+          </div>
+          <div id="results"></div>
+        </div>
+      </section>
+      <section id="admin" class="page">
+        <div id="loginBox" class="card login">
+          <h2 class="title">เข้าสู่ระบบเจ้าหน้าที่</h2>
+          <label>ชื่อผู้ใช้</label><input id="username" /><br /><label
+            >รหัสผ่าน</label
+          ><input id="password" type="password" />
+          <div class="actions">
+            <button class="btn primary" onclick="login()">เข้าสู่ระบบ</button>
+          </div>
+          <div class="sub">ครั้งแรกใช้ admin / admin123 และควรเปลี่ยนทันที</div>
+        </div>
+        <div id="adminBox" style="display: none">
+          <div class="card">
+            <div class="calendar-head">
+              <h2 class="title">จัดการคำขอยืม</h2>
+              <div>
+                <button class="btn" onclick="openPassword()">
+                  เปลี่ยนรหัสผ่าน
+                </button>
+                <button class="btn danger" onclick="logout()">
+                  ออกจากระบบ
+                </button>
+              </div>
+            </div>
+            <div id="adminResults"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <div class="modal" id="detailModal">
+      <div class="card">
+        <div id="detail"></div>
+        <div class="actions">
+          <button class="btn" onclick="closeModal()">ปิด</button>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script src="config.js"></script>
+    <script>
+      let DATA = { equipment: [], departments: [] },
+        month = new Date(),
+        events = [],
+        token = localStorage.getItem("eqToken") || "",
+        user = JSON.parse(localStorage.getItem("eqUser") || "null");
+      const $ = (s) => document.querySelector(s),
+        $$ = (s) => [...document.querySelectorAll(s)];
+      function server(fn, ...args) {
+        showSpin(1);
+        return apiCall(fn, args)
+          .then((x) => {
+            showSpin(0);
+            return x;
+          })
+          .catch((e) => {
+            showSpin(0);
+            toast(e.message || String(e), true);
+            throw e;
+          });
+      }
+      function apiCall(action, args) {
+        const url = window.APP_CONFIG && APP_CONFIG.API_URL;
+        if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url || ""))
+          return Promise.reject(
+            new Error("กรุณาตั้งค่า API_URL ในไฟล์ config.js ก่อนใช้งาน"),
+          );
+        const packed = JSON.stringify(args);
+        const readOnly = [
+          "getInitialData",
+          "getCalendarEvents",
+          "searchBookings",
+        ].includes(action);
+        if (!readOnly || packed.length > 7000) {
+          return fetch(url, {
+            method: "POST",
+            redirect: "follow",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action, args }),
+          })
+            .then((r) => r.json())
+            .then(unwrap);
+        }
+        return new Promise((resolve, reject) => {
+          const cb =
+            "gasCb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+          const script = document.createElement("script");
+          const timer = setTimeout(
+            () => finish(new Error("เชื่อมต่อ API ไม่สำเร็จ")),
+            30000,
+          );
+          function finish(err, value) {
+            clearTimeout(timer);
+            delete window[cb];
+            script.remove();
+            err ? reject(err) : resolve(value);
+          }
+          window[cb] = (payload) => {
+            try {
+              finish(null, unwrap(payload));
+            } catch (e) {
+              finish(e);
+            }
+          };
+          script.onerror = () => finish(new Error("โหลด API ไม่สำเร็จ"));
+          script.src =
+            url +
+            "?action=" +
+            encodeURIComponent(action) +
+            "&args=" +
+            encodeURIComponent(packed) +
+            "&callback=" +
+            cb +
+            "&_=" +
+            Date.now();
+          document.head.appendChild(script);
+        });
+      }
+      function unwrap(payload) {
+        if (!payload || payload.ok !== true)
+          throw new Error((payload && payload.error) || "API ตอบกลับไม่ถูกต้อง");
+        return payload.data;
+      }
+      function showSpin(v) {
+        $("#spin").style.display = v ? "grid" : "none";
+      }
+      function toast(t, bad) {
+        let x = $("#toast");
+        x.textContent = t;
+        x.style.display = "block";
+        x.style.borderLeft = "6px solid " + (bad ? "#ff91aa" : "#9edfcf");
+        setTimeout(() => (x.style.display = "none"), 4000);
+      }
+      $$(".nav button").forEach(
+        (b) =>
+          (b.onclick = () => {
+            $$(".nav button").forEach((x) => x.classList.remove("active"));
+            b.classList.add("active");
+            $$(".page").forEach((x) => x.classList.remove("active"));
+            $("#" + b.dataset.page).classList.add("active");
+            if (b.dataset.page === "calendar") loadCalendar();
+            if (b.dataset.page === "admin" && token) loadAdmin();
+          }),
+      );
+      async function init() {
+        DATA = await server("getInitialData");
+        $("#brand").textContent = DATA.systemName;
+        $("#department").innerHTML =
+          '<option value="">เลือกหน่วยงาน</option>' +
+          DATA.departments
+            .map((d) => `<option>${esc(d.department_name)}</option>`)
+            .join("");
+        $("#equipment").innerHTML =
+          DATA.equipment
+            .map(
+              (e) =>
+                `<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code || e.equipment_id)} · ${esc(e.category || "")}</span></label>`,
+            )
+            .join("") ||
+          '<div class="empty">ยังไม่มีอุปกรณ์ที่เปิดใช้งาน</div>';
+        refreshUser();
+        loadCalendar();
+      }
+      async function loadCalendar() {
+        let a = new Date(month.getFullYear(), month.getMonth(), 1),
+          b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
+        events = await server(
+          "getCalendarEvents",
+          a.toISOString(),
+          b.toISOString(),
+        );
+        renderCalendar();
+      }
+      function renderCalendar() {
+        const names = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+        $("#monthLabel").textContent = month.toLocaleDateString("th-TH", {
+          month: "long",
+          year: "numeric",
+        });
+        let first = new Date(month.getFullYear(), month.getMonth(), 1),
+          start = new Date(first);
+        start.setDate(1 - first.getDay());
+        let html = names.map((x) => `<div class="dow">${x}</div>`).join("");
+        for (let i = 0; i < 42; i++) {
+          let d = new Date(start);
+          d.setDate(start.getDate() + i);
+          let ev = events.filter((e) => {
+            let a = new Date(e.start),
+              b = new Date(e.end);
+            return (
+              d >= new Date(a.getFullYear(), a.getMonth(), a.getDate()) &&
+              d <= new Date(b.getFullYear(), b.getMonth(), b.getDate())
+            );
+          });
+          html += `<div class="day ${d.getMonth() !== month.getMonth() ? "muted" : ""}"><div class="daynum">${d.getDate()}</div>${ev
+            .slice(0, 4)
+            .map(
+              (e) =>
+                `<div class="event ${statusClass(e.status)}" onclick='showEvent(${JSON.stringify(JSON.stringify(e))})'>${esc(e.title)}</div>`,
+            )
+            .join("")}</div>`;
+        }
+        $("#cal").innerHTML = html;
+      }
+      function moveMonth(n) {
+        month = new Date(month.getFullYear(), month.getMonth() + n, 1);
+        loadCalendar();
+      }
+      function statusClass(s) {
+        return s === "รออนุมัติ"
+          ? "s-wait"
+          : s === "อนุมัติแล้ว"
+            ? "s-ok"
+            : s === "รับอุปกรณ์แล้ว"
+              ? "s-out"
+              : s === "คืนแล้ว"
+                ? "s-done"
+                : "s-no";
+      }
+      function badge(s) {
+        return `<span class="badge ${statusClass(s)}">${esc(s)}</span>`;
+      }
+      function showEvent(raw) {
+        let e = JSON.parse(raw);
+        $("#detail").innerHTML =
+          `<h2 class="title">${esc(e.title)}</h2><p>${badge(e.status)}</p><p><b>ผู้ยืม:</b> ${esc(e.borrower)}</p><p><b>ตั้งแต่:</b> ${fmt(e.start)}<br><b>ถึง:</b> ${fmt(e.end)}</p><p><b>วัตถุประสงค์:</b> ${esc(e.purpose || "-")}</p>`;
+        $("#detailModal").style.display = "flex";
+      }
+      function closeModal() {
+        $("#detailModal").style.display = "none";
+      }
+      $("#bookingForm").onsubmit = async (e) => {
+        e.preventDefault();
+        let f = new FormData(e.target),
+          file = f.get("attachment"),
+          ids = f.getAll("equipmentIds");
+        if (!ids.length)
+          return toast("กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ", true);
+        let attachment = null;
+        if (file && file.size) {
+          if (file.size > 5 * 1024 * 1024)
+            return toast("ไฟล์ต้องไม่เกิน 5 MB", true);
+          attachment = {
+            name: file.name,
+            type: file.type,
+            data: await dataUrl(file),
+          };
+        }
+        let p = Object.fromEntries(f.entries());
+        p.equipmentIds = ids;
+        p.attachment = attachment;
+        let r = await server("createBooking", p);
+        toast("ส่งคำขอสำเร็จ เลขที่ " + r.id);
+        e.target.reset();
+        month = new Date(p.borrowDateTime);
+        loadCalendar();
+      };
+      function dataUrl(f) {
+        return new Promise((ok) => {
+          let r = new FileReader();
+          r.onload = () => ok(r.result);
+          r.readAsDataURL(f);
+        });
+      }
+      async function search() {
+        let rows = await server("searchBookings", $("#searchQ").value);
+        renderRows(rows, "#results", false);
+      }
+      function renderRows(rows, target, admin) {
+        $(target).innerHTML = rows.length
+          ? `<div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>ผู้ยืม</th><th>อุปกรณ์</th><th>ช่วงยืม</th><th>สถานะ</th>${admin ? "<th>ดำเนินการ</th>" : ""}</tr></thead><tbody>${rows.map((r) => `<tr><td><b>${esc(r.booking_id)}</b><br><span class="sub">${esc(r.department || "")}</span></td><td>${esc(r.borrower_name)}<br><span class="sub">${esc(r.phone || "")}</span></td><td>${esc(r.equipment || "-")}</td><td>${fmt(r.borrow_datetime)}<br>${fmt(r.return_datetime)}</td><td>${badge(r.status)}</td>${admin ? `<td><select onchange="setStatus('${esc(r.booking_id)}',this.value)"><option value="">เปลี่ยนสถานะ</option>${DATA.statuses.map((s) => `<option>${s}</option>`).join("")}</select></td>` : ""}</tr>`).join("")}</tbody></table></div>`
+          : '<div class="empty">ไม่พบข้อมูล</div>';
+      }
+      async function login() {
+        let r = await server(
+          "login",
+          $("#username").value,
+          $("#password").value,
+        );
+        token = r.token;
+        user = r;
+        localStorage.setItem("eqToken", token);
+        localStorage.setItem("eqUser", JSON.stringify(user));
+        refreshUser();
+        loadAdmin();
+        if (r.mustChange) toast("กรุณาเปลี่ยนรหัสผ่านเริ่มต้นทันที", true);
+      }
+      function refreshUser() {
+        $("#who").textContent = user ? "👤 " + user.name : "";
+        $("#loginBox").style.display = token ? "none" : "block";
+        $("#adminBox").style.display = token ? "block" : "none";
+      }
+      async function logout() {
+        try {
+          await server("logout", token);
+        } finally {
+          token = "";
+          user = null;
+          localStorage.removeItem("eqToken");
+          localStorage.removeItem("eqUser");
+          refreshUser();
+        }
+      }
+      async function loadAdmin() {
+        try {
+          let d = await server("getAdminData", token);
+          renderRows(d.bookings, "#adminResults", true);
+        } catch (e) {
+          token = "";
+          user = null;
+          localStorage.clear();
+          refreshUser();
+        }
+      }
+      async function setStatus(id, s) {
+        if (!s) return;
+        let note = ["ไม่อนุมัติ", "คืนแล้ว", "อุปกรณ์ชำรุด"].includes(s)
+          ? prompt("หมายเหตุ/เหตุผล:") || ""
+          : "";
+        await server("changeStatus", token, id, s, note);
+        toast("อัปเดตสถานะแล้ว");
+        loadAdmin();
+        loadCalendar();
+      }
+      async function openPassword() {
+        let old = prompt("รหัสผ่านเดิม");
+        if (old === null) return;
+        let n = prompt("รหัสผ่านใหม่ อย่างน้อย 8 ตัวอักษร");
+        if (n === null) return;
+        await server("changePassword", token, old, n);
+        toast("เปลี่ยนรหัสผ่านสำเร็จ");
+      }
+      function esc(v) {
+        return String(v ?? "").replace(
+          /[&<>'"]/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              "'": "&#39;",
+              '"': "&quot;",
+            })[c],
+        );
+      }
+      function fmt(v) {
+        if (!v) return "-";
+        let d = new Date(v);
+        return isNaN(d)
+          ? esc(v)
+          : d.toLocaleString("th-TH", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            });
+      }
+      init();
+    </script>
+  </body>
+</html>
 
