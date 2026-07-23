@@ -482,7 +482,7 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V13</div>
       </div>
       <div id="who"></div>
     </header>
@@ -1154,7 +1154,6 @@
           (ranged?'<div class="dashboard-range-note">สรุปตามประเภทและช่วงวันเวลาที่เลือก</div>':"");
       }
       const tableStates={};
-      function debounce(fn,wait=180){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),wait)}}
       function normalizeSearchText(value){
         return String(value??"")
           .normalize("NFC")
@@ -1181,29 +1180,38 @@
       }
       function renderDataTable(target,rows,key,renderer){
         tableStates[key]=tableStates[key]||{q:"",sort:"desc",size:10,page:1};
-        const s=tableStates[key], filtered=filterTableRows(rows,s.q)
+        const s=tableStates[key];
+        s.rows=Array.isArray(rows)?rows:[];
+        s.renderer=renderer;
+        const filtered=filterTableRows(s.rows,s.q)
           .sort((a,b)=>(String(a._sortValue||a.created_at||a.booking_id||"").localeCompare(String(b._sortValue||b.created_at||b.booking_id||""),"th"))*(s.sort==="asc"?1:-1));
         const total=Math.max(1,Math.ceil(filtered.length/s.size));s.page=Math.min(s.page,total);
         const part=filtered.slice((s.page-1)*s.size,s.page*s.size);
         const container=$(target);
         if(!container.querySelector(".data-controls")){
-          container.innerHTML=`<div class="data-controls"><input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select>${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn">ส่งออก CSV</button><span class="sub"></span><button class="btn">‹</button><button class="btn">›</button></div><div class="data-table-body"></div>`;
-          const [q,sort,size,exportBtn,pageLabel,prev,next]=container.querySelector(".data-controls").children;
+          container.innerHTML=`<div class="data-controls"><input data-control="query" type="search" autocomplete="off" placeholder="ค้นหาข้อมูล..."><select data-control="sort"><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select data-control="size">${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn" data-control="export">ส่งออก CSV</button><span class="sub" data-control="summary"></span><button class="btn" data-control="prev">‹</button><button class="btn" data-control="next">›</button></div><div class="data-table-body"></div>`;
+          const q=container.querySelector('[data-control="query"]');
+          const sort=container.querySelector('[data-control="sort"]');
+          const size=container.querySelector('[data-control="size"]');
+          const exportBtn=container.querySelector('[data-control="export"]');
+          const prev=container.querySelector('[data-control="prev"]');
+          const next=container.querySelector('[data-control="next"]');
           q.value=s.q;sort.value=s.sort;size.value=String(s.size);
-          let composing=false;
-          const applyQuery=debounce(()=>{if(!composing)tableChange(key,"q",q.value,target)},180);
-          q.addEventListener("compositionstart",()=>{composing=true});
-          q.addEventListener("compositionend",()=>{composing=false;tableChange(key,"q",q.value,target)});
-          q.addEventListener("input",applyQuery);
+          const applyQuery=()=>tableChange(key,"q",q.value,target);
+          q.oninput=applyQuery;
+          q.onsearch=applyQuery;
+          q.onchange=applyQuery;
+          q.oncompositionend=applyQuery;
           sort.onchange=()=>tableChange(key,"sort",sort.value,target);
           size.onchange=()=>tableChange(key,"size",size.value,target);
           exportBtn.onclick=()=>exportRows(key);
           prev.onclick=()=>tablePage(key,-1,target);
           next.onclick=()=>tablePage(key,1,target);
         }
-        container.querySelector(".data-controls .sub").textContent=`พบ ${filtered.length} รายการ · หน้า ${s.page}/${total}`;
+        const q=container.querySelector('[data-control="query"]');
+        if(document.activeElement!==q&&q.value!==s.q)q.value=s.q;
+        container.querySelector('[data-control="summary"]').textContent=`พบ ${filtered.length} รายการ · หน้า ${s.page}/${total}`;
         container.querySelector(".data-table-body").innerHTML=renderer(part);
-        tableStates[key].rows=rows;tableStates[key].renderer=renderer;
       }
       function tableChange(key,field,value,target){const s=tableStates[key];s[field]=field==="size"?+value:value;s.page=1;renderDataTable(target,s.rows,key,s.renderer)}
       function tablePage(key,n,target){const s=tableStates[key];s.page=Math.max(1,s.page+n);renderDataTable(target,s.rows,key,s.renderer)}
