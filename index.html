@@ -1155,9 +1155,33 @@
       }
       const tableStates={};
       function debounce(fn,wait=180){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),wait)}}
+      function normalizeSearchText(value){
+        return String(value??"")
+          .normalize("NFC")
+          .replace(/[\u200B-\u200D\u2060\uFEFF]/g,"")
+          .replace(/\u00A0/g," ")
+          .replace(/\s+/g,"")
+          .toLocaleLowerCase("th-TH");
+      }
+      function searchableRow(row){
+        return normalizeSearchText(
+          Object.entries(row||{})
+            .filter(([key,value])=>!key.startsWith("_")&&typeof value!=="object")
+            .map(([,value])=>value)
+            .join(" ")
+        );
+      }
+      function filterTableRows(rows,query){
+        const words=String(query??"").trim().split(/\s+/).map(normalizeSearchText).filter(Boolean);
+        if(!words.length)return rows.slice();
+        return rows.filter(row=>{
+          const haystack=searchableRow(row);
+          return words.every(word=>haystack.includes(word));
+        });
+      }
       function renderDataTable(target,rows,key,renderer){
         tableStates[key]=tableStates[key]||{q:"",sort:"desc",size:10,page:1};
-        const s=tableStates[key], filtered=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(s.q.toLowerCase()))
+        const s=tableStates[key], filtered=filterTableRows(rows,s.q)
           .sort((a,b)=>(String(a._sortValue||a.created_at||a.booking_id||"").localeCompare(String(b._sortValue||b.created_at||b.booking_id||""),"th"))*(s.sort==="asc"?1:-1));
         const total=Math.max(1,Math.ceil(filtered.length/s.size));s.page=Math.min(s.page,total);
         const part=filtered.slice((s.page-1)*s.size,s.page*s.size);
@@ -1166,20 +1190,24 @@
           container.innerHTML=`<div class="data-controls"><input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select>${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn">ส่งออก CSV</button><span class="sub"></span><button class="btn">‹</button><button class="btn">›</button></div><div class="data-table-body"></div>`;
           const [q,sort,size,exportBtn,pageLabel,prev,next]=container.querySelector(".data-controls").children;
           q.value=s.q;sort.value=s.sort;size.value=String(s.size);
-          q.oninput=debounce(()=>tableChange(key,"q",q.value,target),180);
+          let composing=false;
+          const applyQuery=debounce(()=>{if(!composing)tableChange(key,"q",q.value,target)},180);
+          q.addEventListener("compositionstart",()=>{composing=true});
+          q.addEventListener("compositionend",()=>{composing=false;tableChange(key,"q",q.value,target)});
+          q.addEventListener("input",applyQuery);
           sort.onchange=()=>tableChange(key,"sort",sort.value,target);
           size.onchange=()=>tableChange(key,"size",size.value,target);
           exportBtn.onclick=()=>exportRows(key);
           prev.onclick=()=>tablePage(key,-1,target);
           next.onclick=()=>tablePage(key,1,target);
         }
-        container.querySelector(".data-controls .sub").textContent=`หน้า ${s.page}/${total}`;
+        container.querySelector(".data-controls .sub").textContent=`พบ ${filtered.length} รายการ · หน้า ${s.page}/${total}`;
         container.querySelector(".data-table-body").innerHTML=renderer(part);
         tableStates[key].rows=rows;tableStates[key].renderer=renderer;
       }
       function tableChange(key,field,value,target){const s=tableStates[key];s[field]=field==="size"?+value:value;s.page=1;renderDataTable(target,s.rows,key,s.renderer)}
       function tablePage(key,n,target){const s=tableStates[key];s.page=Math.max(1,s.page+n);renderDataTable(target,s.rows,key,s.renderer)}
-      function exportRows(key){const s=tableStates[key],rows=s.rows.filter(r=>JSON.stringify(r).toLowerCase().includes(s.q.toLowerCase()));downloadCsv(key+".csv",rows)}
+      function exportRows(key){const s=tableStates[key],rows=filterTableRows(s.rows,s.q).sort((a,b)=>(String(a._sortValue||a.created_at||a.booking_id||"").localeCompare(String(b._sortValue||b.created_at||b.booking_id||""),"th"))*(s.sort==="asc"?1:-1));downloadCsv(key+".csv",rows)}
       function downloadCsv(name,rows){if(!rows.length)return notice("ไม่มีข้อมูลสำหรับส่งออก","warning");const keys=Object.keys(rows[0]).filter(k=>typeof rows[0][k]!=="object"&&!k.startsWith("_")),cell=v=>`"${String(v??"").replaceAll('"','""')}"`,csv="\uFEFF"+keys.map(cell).join(",")+"\n"+rows.map(r=>keys.map(k=>cell(r[k])).join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
       async function reloadAdminAndPublic(){ADMIN=null;adminLoadedAt=0;publicBookingsCache={rows:[],loadedAt:0};await Promise.all([loadAdmin(),refreshInitialData()]);}
       function esc(v) {
