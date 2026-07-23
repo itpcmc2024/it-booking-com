@@ -482,7 +482,7 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V14</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V15</div>
       </div>
       <div id="who"></div>
     </header>
@@ -1185,7 +1185,7 @@
         s.renderer=renderer;
         const container=$(target);
         if(!container.querySelector(".data-controls")){
-          container.innerHTML=`<div class="data-controls"><input data-control="query" type="search" autocomplete="off" placeholder="ค้นหาข้อมูล..."><select data-control="sort"><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select data-control="size">${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn" data-control="export">ส่งออก CSV</button><span class="sub" data-control="summary"></span><button class="btn" data-control="prev">‹</button><button class="btn" data-control="next">›</button></div><div class="data-table-body"></div>`;
+          container.innerHTML=`<div class="data-controls" data-table-key="${esc(key)}" data-table-target="${esc(target)}"><input data-control="query" data-table-key="${esc(key)}" data-table-target="${esc(target)}" type="search" autocomplete="off" placeholder="ค้นหาข้อมูล..." oninput="dataTableQueryInput(this)" onsearch="dataTableQueryInput(this)" oncompositionend="dataTableQueryInput(this)"><select data-control="sort"><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select data-control="size">${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn" data-control="export">ส่งออก CSV</button><span class="sub" data-control="summary"></span><button class="btn" data-control="prev">‹</button><button class="btn" data-control="next">›</button></div><div class="data-table-body"></div>`;
           const q=container.querySelector('[data-control="query"]');
           const sort=container.querySelector('[data-control="sort"]');
           const size=container.querySelector('[data-control="size"]');
@@ -1193,11 +1193,6 @@
           const prev=container.querySelector('[data-control="prev"]');
           const next=container.querySelector('[data-control="next"]');
           q.value=s.q;sort.value=s.sort;size.value=String(s.size);
-          let composing=false;
-          q.addEventListener("compositionstart",()=>{composing=true});
-          q.addEventListener("compositionend",()=>{composing=false;tableChange(key,"q",q.value,target)});
-          q.addEventListener("input",()=>{if(!composing)tableChange(key,"q",q.value,target)});
-          q.addEventListener("search",()=>tableChange(key,"q",q.value,target));
           sort.addEventListener("change",()=>tableChange(key,"sort",sort.value,target));
           size.addEventListener("change",()=>tableChange(key,"size",size.value,target));
           exportBtn.addEventListener("click",()=>exportRows(key));
@@ -1206,9 +1201,20 @@
         }
         refreshDataTable(target,key);
       }
+      function dataTableQueryInput(input){
+        const key=input && input.dataset.tableKey;
+        const target=input && input.dataset.tableTarget;
+        if(!key||!target||!tableStates[key])return;
+        tableStates[key].q=input.value||"";
+        tableStates[key].page=1;
+        refreshDataTable(target,key);
+      }
       function refreshDataTable(target,key){
         const s=tableStates[key];
         const container=$(target);
+        if(!s||!container)return;
+        const liveQuery=container.querySelector('[data-control="query"]');
+        if(liveQuery&&document.activeElement===liveQuery)s.q=liveQuery.value||"";
         const filtered=filterTableRows(s.rows,s.q)
           .sort((a,b)=>(String(a._sortValue||a.created_at||a.booking_id||"").localeCompare(String(b._sortValue||b.created_at||b.booking_id||""),"th"))*(s.sort==="asc"?1:-1));
         const total=Math.max(1,Math.ceil(filtered.length/s.size));
