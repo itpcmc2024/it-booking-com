@@ -204,7 +204,18 @@
         overflow: hidden;
         text-overflow: ellipsis;
         cursor: pointer;
+        color: #334155;
+        border-left: 5px solid var(--event-color, #9aa7b8);
+        background: color-mix(in srgb, var(--event-color, #d7eaff) 30%, white);
       }
+      .weekend { color: #e45469; }
+      .month-pickers { display:flex; gap:8px; align-items:center; }
+      .month-pickers select { width:auto; min-width:120px; font-weight:600; }
+      .dashboard-strip { display:grid; grid-template-columns:repeat(5,minmax(130px,1fr)); gap:10px; margin-bottom:18px; }
+      .dashboard-strip .stat { min-height:82px; }
+      .data-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:12px 0; }
+      .data-controls input { flex:1 1 220px; }
+      .data-controls select { width:auto; min-width:115px; }
       .s-wait {
         background: var(--yellow);
       }
@@ -354,6 +365,15 @@
         .calendar {
           gap: 2px;
         }
+        .dashboard-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .calendar-head { flex-wrap:wrap; }
+        .month-pickers { order:-1; width:100%; justify-content:center; }
+        .month-pickers select { min-width:0; flex:1; }
+        .wrap { padding:0 8px; margin:10px auto; }
+        .card { padding:14px; border-radius:16px; }
+        .nav { overflow-x:auto; flex-wrap:nowrap; }
+        .nav button { white-space:nowrap; }
+        body { font-size:clamp(13px,3.5vw,16px); }
       }
     </style>
   </head>
@@ -374,16 +394,21 @@
     </nav>
     <main class="wrap">
       <section id="calendar" class="page active">
+        <div class="dashboard-strip public-dashboard"></div>
         <div class="card">
           <div class="calendar-head">
             <button class="btn" onclick="moveMonth(-1)">‹ ก่อนหน้า</button>
-            <h2 class="title" id="monthLabel"></h2>
+            <div class="month-pickers">
+              <select id="monthSelect" aria-label="เลือกเดือน"></select>
+              <select id="yearSelect" aria-label="เลือกปี"></select>
+            </div>
             <button class="btn" onclick="moveMonth(1)">ถัดไป ›</button>
           </div>
           <div class="calendar" id="cal"></div>
         </div>
       </section>
       <section id="booking" class="page">
+        <div class="dashboard-strip public-dashboard"></div>
         <form class="card" id="bookingForm">
           <h2 class="title">แบบฟอร์มขอยืมอุปกรณ์</h2>
           <div class="grid">
@@ -436,6 +461,7 @@
         </form>
       </section>
       <section id="status" class="page">
+        <div class="dashboard-strip public-dashboard"></div>
         <div class="card">
           <h2 class="title">ตรวจสอบสถานะคำขอ</h2>
           <div class="toolbar">
@@ -448,6 +474,7 @@
         </div>
       </section>
       <section id="admin" class="page">
+        <div class="dashboard-strip public-dashboard"></div>
         <div id="loginBox" class="card login">
           <h2 class="title">เข้าสู่ระบบเจ้าหน้าที่</h2>
           <label>ชื่อผู้ใช้</label><input id="username" /><br /><label
@@ -532,6 +559,7 @@
         const readOnly = [
           "getInitialData",
           "getCalendarEvents",
+          "getAvailableEquipment",
           "searchBookings",
         ].includes(action);
         if (!readOnly || packed.length > 7000) {
@@ -613,19 +641,14 @@
       async function init() {
         DATA = await server("getInitialData");
         $("#brand").textContent = DATA.systemName;
+        renderPublicDashboard();
+        setupMonthPickers();
         $("#department").innerHTML =
           '<option value="">เลือกหน่วยงาน</option>' +
           DATA.departments
             .map((d) => `<option>${esc(d.department_name)}</option>`)
             .join("");
-        $("#equipment").innerHTML =
-          DATA.equipment
-            .map(
-              (e) =>
-                `<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code || e.equipment_id)} · ${esc(e.category || "")}</span></label>`,
-            )
-            .join("") ||
-          '<div class="empty">ยังไม่มีอุปกรณ์ที่เปิดใช้งาน</div>';
+        renderAvailableEquipment([]);
         refreshUser();
         loadCalendar();
       }
@@ -639,16 +662,27 @@
         );
         renderCalendar();
       }
+      function setupMonthPickers() {
+        const months=Array.from({length:12},(_,i)=>new Date(2020,i,1).toLocaleDateString("th-TH",{month:"long"}));
+        $("#monthSelect").innerHTML=months.map((x,i)=>`<option value="${i}">${x}</option>`).join("");
+        const now=new Date().getFullYear(), years=Array.from({length:11},(_,i)=>now-5+i);
+        $("#yearSelect").innerHTML=years.map(y=>`<option value="${y}">${y+543}</option>`).join("");
+        $("#monthSelect").onchange=$("#yearSelect").onchange=()=>{month=new Date(+$year().value,+$("#monthSelect").value,1);loadCalendar();};
+        syncMonthPickers();
+      }
+      function $year(){return $("#yearSelect")}
+      function syncMonthPickers(){
+        $("#monthSelect").value=month.getMonth();
+        if(![...$year().options].some(o=>+o.value===month.getFullYear()))$year().add(new Option(String(month.getFullYear()+543),month.getFullYear()));
+        $year().value=month.getFullYear();
+      }
       function renderCalendar() {
         const names = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-        $("#monthLabel").textContent = month.toLocaleDateString("th-TH", {
-          month: "long",
-          year: "numeric",
-        });
+        syncMonthPickers();
         let first = new Date(month.getFullYear(), month.getMonth(), 1),
           start = new Date(first);
         start.setDate(1 - first.getDay());
-        let html = names.map((x) => `<div class="dow">${x}</div>`).join("");
+        let html = names.map((x,i) => `<div class="dow ${i===0||i===6?"weekend":""}">${x}</div>`).join("");
         for (let i = 0; i < 42; i++) {
           let d = new Date(start);
           d.setDate(start.getDate() + i);
@@ -664,7 +698,7 @@
             .slice(0, 4)
             .map(
               (e) =>
-                `<div class="event ${statusClass(e.status)}" onclick='showEvent(${JSON.stringify(JSON.stringify(e))})'>${esc(e.title)}</div>`,
+                `<div class="event" style="--event-color:${esc(e.color||"#9ecff5")}" onclick='showEvent(${JSON.stringify(JSON.stringify(e))})'>${esc(e.title)}</div>`,
             )
             .join("")}</div>`;
         }
@@ -672,6 +706,7 @@
       }
       function moveMonth(n) {
         month = new Date(month.getFullYear(), month.getMonth() + n, 1);
+        syncMonthPickers();
         loadCalendar();
       }
       function statusClass(s) {
@@ -691,7 +726,7 @@
       function showEvent(raw) {
         let e = JSON.parse(raw);
         $("#detail").innerHTML =
-          `<h2 class="title">${esc(e.title)}</h2><p>${badge(e.status)}</p><p><b>ผู้ยืม:</b> ${esc(e.borrower)}</p><p><b>ตั้งแต่:</b> ${fmt(e.start)}<br><b>ถึง:</b> ${fmt(e.end)}</p><p><b>วัตถุประสงค์:</b> ${esc(e.purpose || "-")}</p>`;
+          `<h2 class="title">${esc(e.equipment||e.title)}</h2><p>${badge(e.status)}</p><p><b>เลขที่คำขอ:</b> ${esc(e.id)}</p><p><b>รหัสทรัพย์สิน:</b> ${esc(e.assetCode||"-")}</p><p><b>ผู้ยืม:</b> ${esc(e.borrower)}</p><p><b>หน่วยงาน:</b> ${esc(e.department||"-")} · <b>โทร:</b> ${esc(e.phone||"-")}</p><p><b>ตั้งแต่:</b> ${fmt(e.start)}<br><b>ถึง:</b> ${fmt(e.end)}</p><p><b>สถานที่ใช้:</b> ${esc(e.location||"-")}</p><p><b>วัตถุประสงค์:</b> ${esc(e.purpose || "-")}</p>`;
         $("#detailModal").style.display = "flex";
       }
       function closeModal() {
@@ -723,6 +758,20 @@
         month = new Date(p.borrowDateTime);
         loadCalendar();
       };
+      async function refreshAvailableEquipment(){
+        const form=$("#bookingForm"),a=form.elements.borrowDateTime.value,b=form.elements.returnDateTime.value;
+        if(!a||!b){renderAvailableEquipment([]);return;}
+        if(new Date(b)<=new Date(a)){renderAvailableEquipment([],true);return;}
+        const list=await server("getAvailableEquipment",a,b);
+        renderAvailableEquipment(list);
+      }
+      $("#bookingForm").elements.borrowDateTime.addEventListener("change",refreshAvailableEquipment);
+      $("#bookingForm").elements.returnDateTime.addEventListener("change",refreshAvailableEquipment);
+      function renderAvailableEquipment(list,invalid){
+        const source=list.length?list:(invalid?[]:DATA.equipment);
+        $("#equipment").innerHTML=source.map(e=>`<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code||e.equipment_id)} · ${esc(e.category||"")}</span></label>`).join("")||
+          `<div class="empty">${invalid?"กรุณาเลือกวันเวลาคืนให้มากกว่าวันเวลารับ":"ไม่มีอุปกรณ์ว่างในช่วงเวลานี้"}</div>`;
+      }
       function dataUrl(f) {
         return new Promise((ok) => {
           let r = new FileReader();
@@ -735,9 +784,9 @@
         renderRows(rows, "#results", false);
       }
       function renderRows(rows, target, admin) {
-        $(target).innerHTML = rows.length
-          ? `<div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>ผู้ยืม</th><th>อุปกรณ์</th><th>ช่วงยืม</th><th>สถานะ</th>${admin ? "<th>ดำเนินการ</th>" : ""}</tr></thead><tbody>${rows.map((r) => `<tr><td><b>${esc(r.booking_id)}</b><br><span class="sub">${esc(r.department || "")}</span></td><td>${esc(r.borrower_name)}<br><span class="sub">${esc(r.phone || "")}</span></td><td>${esc(r.equipment || "-")}</td><td>${fmt(r.borrow_datetime)}<br>${fmt(r.return_datetime)}</td><td>${badge(r.status)}</td>${admin ? `<td><select onchange="setStatus('${esc(r.booking_id)}',this.value)"><option value="">เปลี่ยนสถานะ</option>${DATA.statuses.map((s) => `<option>${s}</option>`).join("")}</select></td>` : ""}</tr>`).join("")}</tbody></table></div>`
-          : '<div class="empty">ไม่พบข้อมูล</div>';
+        renderDataTable(target,rows,admin?"admin-bookings":"public-bookings",(pageRows) => pageRows.length
+          ? `<div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>ผู้ยืม</th><th>อุปกรณ์</th><th>ช่วงยืม</th><th>สถานะ</th>${admin ? "<th>ดำเนินการ</th>" : ""}</tr></thead><tbody>${pageRows.map((r) => `<tr><td><b>${esc(r.booking_id)}</b><br><span class="sub">${esc(r.department || "")}</span></td><td>${esc(r.borrower_name)}<br><span class="sub">${esc(r.phone || "")}</span></td><td>${esc(r.equipment || "-")}</td><td>${fmt(r.borrow_datetime)}<br>${fmt(r.return_datetime)}</td><td>${badge(r.status)}</td>${admin ? `<td><select onchange="setStatus('${esc(r.booking_id)}',this.value)"><option value="">เปลี่ยนสถานะ</option>${DATA.statuses.map((s) => `<option>${s}</option>`).join("")}</select></td>` : ""}</tr>`).join("")}</tbody></table></div>`
+          : '<div class="empty">ไม่พบข้อมูล</div>');
       }
       async function login() {
         let r = await server(
@@ -825,6 +874,7 @@
         ].map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join("");
         if(ADMIN.role!=="ADMIN")return;
         renderEquipmentAdmin();renderDepartmentAdmin();renderUserAdmin();renderSettings();renderLogs();
+        setTimeout(enhanceAdminTables,0);
       }
       function adminTable(headers,rows){
         return rows.length?`<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:'<div class="empty">ยังไม่มีข้อมูล</div>';
@@ -847,7 +897,7 @@
         const equipmentHtml=`<div class="grid" style="text-align:left">
           ${formInput("ชื่ออุปกรณ์ *","equipment_name",e.equipment_name)}
           ${formInput("รหัสทรัพย์สิน","asset_code",e.asset_code)}
-          ${formInput("ประเภท","category",e.category)}
+          <div><label>ประเภท</label><select class="swal-field" name="category">${selectOptions(["Notebook","PC","Projector","TV"],e.category||"Notebook")}</select></div>
           ${formInput("ยี่ห้อ","brand",e.brand)}
           ${formInput("รุ่น","model",e.model)}
           ${formInput("Serial Number","serial_number",e.serial_number)}
@@ -875,7 +925,7 @@
         $("#userAdmin").innerHTML=adminTable(["Username","ชื่อ–นามสกุล","หน่วยงาน","สิทธิ์","ใช้งาน","ดำเนินการ"],(ADMIN.users||[]).map((u,i)=>`<tr><td><b>${esc(u.username)}</b><br><span class="sub">${esc(u.user_id)}</span></td><td>${esc(u.full_name)}</td><td>${esc(u.department||"-")}</td><td>${esc(u.role)}</td><td>${activeBadge(u.active)}</td><td><button class="mini-btn edit" onclick="userForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('user','${esc(u.user_id)}',${!truth(u.active)})">${truth(u.active)?"ระงับ":"เปิด"}</button></td></tr>`));
       }
       async function userForm(i){
-        const u=i===undefined?{}:ADMIN.users[i],roles=["USER","OFFICER","APPROVER","ADMIN"];
+        const u=i===undefined?{}:ADMIN.users[i],roles=["ADMIN","USER"];
         const roleOptions=roles.map(x=>`<option ${u.role===x?"selected":""}>${x}</option>`).join("");
         const depOptions=(ADMIN.departments||[]).map(x=>`<option ${u.department===x.department_name?"selected":""}>${esc(x.department_name)}</option>`).join("");
         const html=`<div class="grid" style="text-align:left"><div><label>Username *</label><input class="swal-field" name="username" value="${esc(u.username||"")}"></div><div><label>ชื่อ–นามสกุล *</label><input class="swal-field" name="full_name" value="${esc(u.full_name||"")}"></div><div><label>สิทธิ์</label><select class="swal-field" name="role">${roleOptions}</select></div><div><label>หน่วยงาน</label><select class="swal-field" name="department"><option value="">-</option>${depOptions}</select></div><div><label>ตำแหน่ง</label><input class="swal-field" name="position" value="${esc(u.position||"")}"></div><div><label>เบอร์โทร</label><input class="swal-field" name="phone" value="${esc(u.phone||"")}"></div><div class="full"><label>${u.user_id?"รหัสผ่านใหม่ (เว้นว่างหากไม่เปลี่ยน)":"รหัสผ่านอย่างน้อย 8 ตัว *"}</label><input type="password" class="swal-field" name="password"></div></div>`;
@@ -902,6 +952,28 @@
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
       async function reloadAdminAndPublic(){await loadAdmin();DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");$("#equipment").innerHTML=DATA.equipment.map(e=>`<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code||e.equipment_id)} · ${esc(e.category||"")}</span></label>`).join("")||'<div class="empty">ยังไม่มีอุปกรณ์ที่เปิดใช้งาน</div>';}
+      function renderPublicDashboard(){
+        const s=DATA.summary||{};
+        const cards=[["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]];
+        $$(".public-dashboard").forEach(el=>el.innerHTML=cards.map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join(""));
+      }
+      const tableStates={};
+      function renderDataTable(target,rows,key,renderer){
+        tableStates[key]=tableStates[key]||{q:"",sort:"desc",size:10,page:1};
+        const s=tableStates[key], filtered=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(s.q.toLowerCase()))
+          .sort((a,b)=>(String(a.created_at||a.booking_id||"").localeCompare(String(b.created_at||b.booking_id||"")))*(s.sort==="asc"?1:-1));
+        const total=Math.max(1,Math.ceil(filtered.length/s.size));s.page=Math.min(s.page,total);
+        const part=filtered.slice((s.page-1)*s.size,s.page*s.size);
+        $(target).innerHTML=`<div class="data-controls"><input placeholder="ค้นหาข้อมูล..." value="${esc(s.q)}" oninput="tableChange('${key}','q',this.value,'${target}')"><select onchange="tableChange('${key}','sort',this.value,'${target}')"><option value="desc" ${s.sort==="desc"?"selected":""}>ใหม่ → เก่า</option><option value="asc" ${s.sort==="asc"?"selected":""}>เก่า → ใหม่</option></select><select onchange="tableChange('${key}','size',this.value,'${target}')">${[10,20,50,100].map(n=>`<option ${s.size===n?"selected":""}>${n}</option>`).join("")}</select><button class="btn" onclick="exportRows('${key}')">ส่งออก CSV</button><span class="sub">หน้า ${s.page}/${total}</span><button class="btn" onclick="tablePage('${key}',-1,'${target}')">‹</button><button class="btn" onclick="tablePage('${key}',1,'${target}')">›</button></div>${renderer(part)}`;
+        tableStates[key].rows=rows;tableStates[key].renderer=renderer;
+      }
+      function tableChange(key,field,value,target){const s=tableStates[key];s[field]=field==="size"?+value:value;s.page=1;renderDataTable(target,s.rows,key,s.renderer)}
+      function tablePage(key,n,target){const s=tableStates[key];s.page=Math.max(1,s.page+n);renderDataTable(target,s.rows,key,s.renderer)}
+      function exportRows(key){const s=tableStates[key],rows=s.rows.filter(r=>JSON.stringify(r).toLowerCase().includes(s.q.toLowerCase()));downloadCsv(key+".csv",rows)}
+      function downloadCsv(name,rows){if(!rows.length)return notice("ไม่มีข้อมูลสำหรับส่งออก","warning");const keys=Object.keys(rows[0]).filter(k=>typeof rows[0][k]!=="object"),cell=v=>`"${String(v??"").replaceAll('"','""')}"`,csv="\uFEFF"+keys.map(cell).join(",")+"\n"+rows.map(r=>keys.map(k=>cell(r[k])).join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
+      function enhanceAdminTables(){
+        ["admin-equipment","admin-departments","admin-users","admin-logs"].forEach(id=>{const panel=$("#"+id),table=panel&&panel.querySelector("table");if(!table||panel.querySelector(".data-controls"))return;const rows=[...table.tBodies[0].rows],controls=document.createElement("div");controls.className="data-controls";controls.innerHTML='<input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select><option>10</option><option>20</option><option>50</option><option>100</option></select><button class="btn">ส่งออก CSV</button>';panel.insertBefore(controls,panel.querySelector(".table-wrap"));const [q,sort,size,btn]=controls.children;function apply(){const list=rows.filter(r=>r.innerText.toLowerCase().includes(q.value.toLowerCase()));list.sort((a,b)=>a.rowIndex-b.rowIndex);if(sort.value==="desc")list.reverse();rows.forEach(r=>r.style.display="none");list.slice(0,+size.value).forEach(r=>{r.style.display="";table.tBodies[0].appendChild(r)})}q.oninput=sort.onchange=size.onchange=apply;btn.onclick=()=>downloadCsv(id+".csv",rows.filter(r=>r.style.display!=="none").map(r=>Object.fromEntries([...r.cells].map((c,i)=>["คอลัมน์ "+(i+1),c.innerText]))));apply()})}
+      async function reloadAdminAndPublic(){await loadAdmin();DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;renderPublicDashboard();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function esc(v) {
         return String(v ?? "").replace(
           /[&<>'"]/g,
