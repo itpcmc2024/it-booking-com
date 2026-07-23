@@ -164,6 +164,16 @@
       }
       .equipment-card-body { padding: 12px; }
       .equipment-card-body strong { display:block; font-size:15px; margin-bottom:5px; }
+      .accessories {
+        display:block;
+        margin-top:7px;
+        padding-top:7px;
+        border-top:1px dashed #dedbed;
+        color:#59677a;
+        font-size:12px;
+        line-height:1.45;
+        overflow-wrap:anywhere;
+      }
       .equipment-placeholder {
         aspect-ratio: 4/3;
         display:grid;
@@ -790,6 +800,7 @@
           ${detailItem("ผู้ยืม",e.borrower)}${detailItem("หน่วยงาน",e.department||"-")}
           ${detailItem("เบอร์ติดต่อ",e.phone||"-")}${detailItem("สถานที่ใช้",e.location||"-")}
           ${detailItem("เริ่มยืม",fmt(e.start))}${detailItem("สิ้นสุดการยืม",fmt(e.end))}
+          ${e.accessories?detailItem("อุปกรณ์เสริม",e.accessories,true):""}
           ${detailItem("วัตถุประสงค์",e.purpose||"-",true)}</div>`;
         $("#detailModal").style.display = "flex";
       }
@@ -831,8 +842,12 @@
         $("#availableEquipmentMessage").textContent=availableEquipment.length?`พบอุปกรณ์ว่าง ${availableEquipment.length} รายการ — คลิกรูปเพื่อยื่นคำขอ`:"ไม่มีอุปกรณ์ว่างในประเภทและช่วงเวลานี้";
         $("#equipmentGallery").innerHTML=availableEquipment.map((e,i)=>`<button type="button" class="equipment-card" onclick="chooseEquipment(${i})">
           ${equipmentImage(e)}
-          <span class="equipment-card-body"><strong>${esc(e.equipment_name)}</strong><span class="sub">${esc([e.brand,e.model].filter(Boolean).join(" ")||e.category||"")}</span><br><span class="sub">${esc(e.current_location||"")}</span></span>
+          <span class="equipment-card-body"><strong>${esc(e.equipment_name)}</strong><span class="sub">${esc([e.brand,e.model].filter(Boolean).join(" ")||e.category||"")}</span><br><span class="sub">${esc(e.current_location||"")}</span>${accessoriesHtml(e.default_accessories)}</span>
         </button>`).join("");
+      }
+      function accessoriesHtml(value){
+        const text=String(value||"").split(",").map(x=>x.trim()).filter(Boolean).join(", ");
+        return text?`<span class="accessories">อุปกรณ์เสริม: ${esc(text)}</span>`:"";
       }
       function equipmentImage(e){
         return e&&e.image_url?`<img class="equipment-thumb" src="${esc(e.image_url)}" alt="${esc(e.equipment_name||"รูปอุปกรณ์")}" loading="lazy" onerror="this.outerHTML='<span class=&quot;equipment-placeholder&quot;>💻</span>'">`:'<span class="equipment-placeholder">💻</span>';
@@ -842,7 +857,7 @@
         form.elements.equipmentIds.value=e.equipment_id;
         form.elements.borrowDateTime.value=$("#pickerBorrow").value;
         form.elements.returnDateTime.value=$("#pickerReturn").value;
-        $("#selectedEquipmentSummary").innerHTML=`${equipmentImage(e)}<div><strong>${esc(e.equipment_name)}</strong><div class="sub">${esc([e.category,e.brand,e.model].filter(Boolean).join(" · "))}</div><div class="sub">รับ ${fmt($("#pickerBorrow").value)} · คืน ${fmt($("#pickerReturn").value)}</div></div>`;
+        $("#selectedEquipmentSummary").innerHTML=`${equipmentImage(e)}<div><strong>${esc(e.equipment_name)}</strong><div class="sub">${esc([e.category,e.brand,e.model].filter(Boolean).join(" · "))}</div>${accessoriesHtml(e.default_accessories)}<div class="sub" style="margin-top:7px">รับ ${fmt($("#pickerBorrow").value)} · คืน ${fmt($("#pickerReturn").value)}</div></div>`;
         $("#equipmentPicker").hidden=true; form.hidden=false; form.scrollIntoView({behavior:"smooth",block:"start"});
       }
       function backToEquipmentPicker(clear=false){
