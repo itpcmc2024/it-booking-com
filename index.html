@@ -538,7 +538,7 @@
             </div>
             <div>
               <label class="req">เบอร์ติดต่อ</label
-              ><input name="phone" required />
+              ><input name="phone" type="tel" inputmode="tel" autocomplete="tel" required />
             </div>
             <div><label>อีเมล</label><input type="email" name="email" /></div>
             <div>
@@ -810,11 +810,25 @@
             .slice(0, 4)
             .map(
               (e) =>
-                `<div class="event" style="--event-color:${esc(e.color||"#9ecff5")}" onclick='showEvent(${JSON.stringify(JSON.stringify(e))})'>${esc(e.title)}</div>`,
+                `<div class="event" style="--event-color:${esc(e.color||"#9ecff5")}" onclick='showEvent(${JSON.stringify(JSON.stringify(e))})'>${esc(calendarEventTitle(e,d))}</div>`,
             )
-            .join("")}</div>`;
+            .join("")}${ev.length>4?`<div class="sub">อีก ${ev.length-4} รายการ</div>`:""}</div>`;
         }
         $("#cal").innerHTML = html;
+      }
+      function sameLocalDay(a,b){
+        return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+      }
+      function localTime(v){
+        const d=new Date(v);
+        return isNaN(d)?"":d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",hour12:false});
+      }
+      function calendarEventTitle(e,day){
+        const a=new Date(e.start),b=new Date(e.end),name=e.equipment||e.title||"-";
+        if(sameLocalDay(a,b))return `${name} : ${localTime(a)}–${localTime(b)}`;
+        if(sameLocalDay(day,a))return `${name} : รับ ${localTime(a)}`;
+        if(sameLocalDay(day,b))return `${name} : คืน ${localTime(b)}`;
+        return `${name} : อยู่ระหว่างยืม`;
       }
       function moveMonth(n) {
         month = new Date(month.getFullYear(), month.getMonth() + n, 1);
@@ -828,7 +842,7 @@
             ? "s-ok"
             : s === "รับอุปกรณ์แล้ว"
               ? "s-out"
-              : s === "คืนแล้ว"
+              : ["คืนแล้ว","อุปกรณ์ชำรุด"].includes(s)
                 ? "s-done"
                 : "s-no";
       }
@@ -1136,7 +1150,20 @@
           .sort((a,b)=>(String(a.created_at||a.booking_id||"").localeCompare(String(b.created_at||b.booking_id||"")))*(s.sort==="asc"?1:-1));
         const total=Math.max(1,Math.ceil(filtered.length/s.size));s.page=Math.min(s.page,total);
         const part=filtered.slice((s.page-1)*s.size,s.page*s.size);
-        $(target).innerHTML=`<div class="data-controls"><input placeholder="ค้นหาข้อมูล..." value="${esc(s.q)}" oninput="tableChange('${key}','q',this.value,'${target}')"><select onchange="tableChange('${key}','sort',this.value,'${target}')"><option value="desc" ${s.sort==="desc"?"selected":""}>ใหม่ → เก่า</option><option value="asc" ${s.sort==="asc"?"selected":""}>เก่า → ใหม่</option></select><select onchange="tableChange('${key}','size',this.value,'${target}')">${[10,20,50,100].map(n=>`<option ${s.size===n?"selected":""}>${n}</option>`).join("")}</select><button class="btn" onclick="exportRows('${key}')">ส่งออก CSV</button><span class="sub">หน้า ${s.page}/${total}</span><button class="btn" onclick="tablePage('${key}',-1,'${target}')">‹</button><button class="btn" onclick="tablePage('${key}',1,'${target}')">›</button></div>${renderer(part)}`;
+        const container=$(target);
+        if(!container.querySelector(".data-controls")){
+          container.innerHTML=`<div class="data-controls"><input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select>${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn">ส่งออก CSV</button><span class="sub"></span><button class="btn">‹</button><button class="btn">›</button></div><div class="data-table-body"></div>`;
+          const [q,sort,size,exportBtn,pageLabel,prev,next]=container.querySelector(".data-controls").children;
+          q.value=s.q;sort.value=s.sort;size.value=String(s.size);
+          q.oninput=()=>tableChange(key,"q",q.value,target);
+          sort.onchange=()=>tableChange(key,"sort",sort.value,target);
+          size.onchange=()=>tableChange(key,"size",size.value,target);
+          exportBtn.onclick=()=>exportRows(key);
+          prev.onclick=()=>tablePage(key,-1,target);
+          next.onclick=()=>tablePage(key,1,target);
+        }
+        container.querySelector(".data-controls .sub").textContent=`หน้า ${s.page}/${total}`;
+        container.querySelector(".data-table-body").innerHTML=renderer(part);
         tableStates[key].rows=rows;tableStates[key].renderer=renderer;
       }
       function tableChange(key,field,value,target){const s=tableStates[key];s[field]=field==="size"?+value:value;s.page=1;renderDataTable(target,s.rows,key,s.renderer)}
