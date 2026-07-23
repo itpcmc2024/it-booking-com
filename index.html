@@ -8,6 +8,7 @@
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
       :root {
         --ink: #405064;
@@ -256,6 +257,21 @@
       .toolbar input {
         max-width: 330px;
       }
+      .admin-tabs { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 18px }
+      .admin-tabs button { background:#f1efff }
+      .admin-tabs button.active { background:linear-gradient(90deg,#cfc9ff,#bdeadd);font-weight:600 }
+      .admin-panel { display:none }
+      .admin-panel.active { display:block }
+      .stats { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px }
+      .stat { border-radius:18px;padding:18px;background:linear-gradient(135deg,#f0edff,#edfaf6) }
+      .stat b { display:block;font-size:28px;margin-top:4px }
+      .mini-btn { padding:7px 10px;border-radius:10px;border:0;background:var(--blue);cursor:pointer;font:inherit;font-size:12px;margin:2px }
+      .mini-btn.edit { background:var(--yellow) }
+      .mini-btn.off { background:var(--pink) }
+      .form-check { display:flex;align-items:center;gap:8px }
+      .form-check input { width:auto }
+      .swal2-popup { font-family:Prompt,sans-serif!important;border-radius:22px!important }
+      .swal2-confirm,.swal2-cancel { border-radius:12px!important;font-family:Prompt,sans-serif!important }
       .toast {
         position: fixed;
         right: 18px;
@@ -426,7 +442,7 @@
         <div id="adminBox" style="display: none">
           <div class="card">
             <div class="calendar-head">
-              <h2 class="title">จัดการคำขอยืม</h2>
+              <div><h2 class="title" style="margin-bottom:2px">ศูนย์จัดการระบบ</h2><span class="sub" id="adminRole"></span></div>
               <div>
                 <button class="btn" onclick="openPassword()">
                   เปลี่ยนรหัสผ่าน
@@ -436,7 +452,22 @@
                 </button>
               </div>
             </div>
-            <div id="adminResults"></div>
+            <div class="admin-tabs" id="adminTabs">
+              <button class="btn active" data-admin="dashboard">📊 Dashboard</button>
+              <button class="btn" data-admin="requests">📋 คำขอยืม</button>
+              <button class="btn admin-only" data-admin="equipment">💻 อุปกรณ์</button>
+              <button class="btn admin-only" data-admin="departments">🏢 หน่วยงาน</button>
+              <button class="btn admin-only" data-admin="users">👥 ผู้ใช้งาน</button>
+              <button class="btn admin-only" data-admin="settings">⚙️ ตั้งค่าระบบ</button>
+              <button class="btn admin-only" data-admin="logs">🕘 ประวัติ</button>
+            </div>
+            <div id="admin-dashboard" class="admin-panel active"><div id="adminStats" class="stats"></div></div>
+            <div id="admin-requests" class="admin-panel"><div id="adminResults"></div></div>
+            <div id="admin-equipment" class="admin-panel"><div class="toolbar"><button class="btn primary" onclick="equipmentForm()">＋ เพิ่มอุปกรณ์</button></div><div id="equipmentAdmin"></div></div>
+            <div id="admin-departments" class="admin-panel"><div class="toolbar"><button class="btn primary" onclick="departmentForm()">＋ เพิ่มหน่วยงาน</button></div><div id="departmentAdmin"></div></div>
+            <div id="admin-users" class="admin-panel"><div class="toolbar"><button class="btn primary" onclick="userForm()">＋ เพิ่มผู้ใช้งาน</button></div><div id="userAdmin"></div></div>
+            <div id="admin-settings" class="admin-panel"><form id="settingsForm" class="grid"></form></div>
+            <div id="admin-logs" class="admin-panel"><div id="logAdmin"></div></div>
           </div>
         </div>
       </section>
@@ -449,12 +480,12 @@
         </div>
       </div>
     </div>
-    <div class="toast" id="toast"></div>
     <script src="config.js"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
         month = new Date(),
         events = [],
+        ADMIN = null,
         token = localStorage.getItem("eqToken") || "",
         user = JSON.parse(localStorage.getItem("eqUser") || "null");
       const $ = (s) => document.querySelector(s),
@@ -468,7 +499,7 @@
           })
           .catch((e) => {
             showSpin(0);
-            toast(e.message || String(e), true);
+            notice(e.message || String(e), "error");
             throw e;
           });
       }
@@ -537,12 +568,11 @@
       function showSpin(v) {
         $("#spin").style.display = v ? "grid" : "none";
       }
-      function toast(t, bad) {
-        let x = $("#toast");
-        x.textContent = t;
-        x.style.display = "block";
-        x.style.borderLeft = "6px solid " + (bad ? "#ff91aa" : "#9edfcf");
-        setTimeout(() => (x.style.display = "none"), 4000);
+      function notice(text, icon = "success", title = "") {
+        return Swal.fire({
+          icon, title: title || (icon === "error" ? "ไม่สำเร็จ" : "เรียบร้อย"),
+          text, confirmButtonText: "ตกลง", confirmButtonColor: "#8f88df"
+        });
       }
       $$(".nav button").forEach(
         (b) =>
@@ -555,6 +585,12 @@
             if (b.dataset.page === "admin" && token) loadAdmin();
           }),
       );
+      $("#adminTabs").onclick = (e) => {
+        const b=e.target.closest("[data-admin]"); if(!b)return;
+        $$("#adminTabs button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+        $$(".admin-panel").forEach(x=>x.classList.remove("active"));
+        $("#admin-"+b.dataset.admin).classList.add("active");
+      };
       async function init() {
         DATA = await server("getInitialData");
         $("#brand").textContent = DATA.systemName;
@@ -648,11 +684,11 @@
           file = f.get("attachment"),
           ids = f.getAll("equipmentIds");
         if (!ids.length)
-          return toast("กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ", true);
+          return notice("กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ", "warning");
         let attachment = null;
         if (file && file.size) {
           if (file.size > 5 * 1024 * 1024)
-            return toast("ไฟล์ต้องไม่เกิน 5 MB", true);
+            return notice("ไฟล์ต้องไม่เกิน 5 MB", "warning");
           attachment = {
             name: file.name,
             type: file.type,
@@ -663,7 +699,7 @@
         p.equipmentIds = ids;
         p.attachment = attachment;
         let r = await server("createBooking", p);
-        toast("ส่งคำขอสำเร็จ เลขที่ " + r.id);
+        await notice("เลขที่คำขอ " + r.id, "success", "ส่งคำขอสำเร็จ");
         e.target.reset();
         month = new Date(p.borrowDateTime);
         loadCalendar();
@@ -696,7 +732,10 @@
         localStorage.setItem("eqUser", JSON.stringify(user));
         refreshUser();
         loadAdmin();
-        if (r.mustChange) toast("กรุณาเปลี่ยนรหัสผ่านเริ่มต้นทันที", true);
+        if (r.mustChange) {
+          await notice("เพื่อความปลอดภัย กรุณาเปลี่ยนรหัสผ่านเริ่มต้นทันที", "warning");
+          openPassword();
+        }
       }
       function refreshUser() {
         $("#who").textContent = user ? "👤 " + user.name : "";
@@ -704,6 +743,8 @@
         $("#adminBox").style.display = token ? "block" : "none";
       }
       async function logout() {
+        const ask=await Swal.fire({icon:"question",title:"ออกจากระบบ?",showCancelButton:true,confirmButtonText:"ออกจากระบบ",cancelButtonText:"ยกเลิก",confirmButtonColor:"#ef7898"});
+        if(!ask.isConfirmed)return;
         try {
           await server("logout", token);
         } finally {
@@ -716,8 +757,11 @@
       }
       async function loadAdmin() {
         try {
-          let d = await server("getAdminData", token);
-          renderRows(d.bookings, "#adminResults", true);
+          ADMIN = await server("getAdminData", token);
+          $("#adminRole").textContent="เข้าสู่ระบบโดย "+(user?.name||"")+" · สิทธิ์ "+ADMIN.role;
+          $$(".admin-only").forEach(x=>x.style.display=ADMIN.role==="ADMIN"?"":"none");
+          renderRows(ADMIN.bookings, "#adminResults", true);
+          renderAdmin();
         } catch (e) {
           token = "";
           user = null;
@@ -727,22 +771,98 @@
       }
       async function setStatus(id, s) {
         if (!s) return;
-        let note = ["ไม่อนุมัติ", "คืนแล้ว", "อุปกรณ์ชำรุด"].includes(s)
-          ? prompt("หมายเหตุ/เหตุผล:") || ""
-          : "";
+        const needs=["ไม่อนุมัติ","คืนแล้ว","อุปกรณ์ชำรุด"].includes(s);
+        const ask=await Swal.fire({
+          icon:"question",title:"ยืนยันเปลี่ยนสถานะ",text:id+" → "+s,
+          input:needs?"textarea":undefined,inputLabel:needs?"หมายเหตุ / เหตุผล":"",inputPlaceholder:"กรอกรายละเอียด...",
+          showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",
+          confirmButtonColor:"#8f88df",preConfirm:v=>needs&&!String(v||"").trim()?Swal.showValidationMessage("กรุณากรอกหมายเหตุหรือเหตุผล"):v
+        });
+        if(!ask.isConfirmed)return;
+        let note=ask.value||"";
         await server("changeStatus", token, id, s, note);
-        toast("อัปเดตสถานะแล้ว");
+        await notice("อัปเดตสถานะของ "+id+" แล้ว");
         loadAdmin();
         loadCalendar();
       }
       async function openPassword() {
-        let old = prompt("รหัสผ่านเดิม");
-        if (old === null) return;
-        let n = prompt("รหัสผ่านใหม่ อย่างน้อย 8 ตัวอักษร");
-        if (n === null) return;
-        await server("changePassword", token, old, n);
-        toast("เปลี่ยนรหัสผ่านสำเร็จ");
+        const r=await Swal.fire({
+          title:"เปลี่ยนรหัสผ่าน",html:
+          '<input id="swOld" type="password" class="swal2-input" placeholder="รหัสผ่านเดิม">'+
+          '<input id="swNew" type="password" class="swal2-input" placeholder="รหัสผ่านใหม่ อย่างน้อย 8 ตัว">'+
+          '<input id="swConfirm" type="password" class="swal2-input" placeholder="ยืนยันรหัสผ่านใหม่">',
+          showCancelButton:true,confirmButtonText:"บันทึก",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",
+          preConfirm:()=>{const old=$("#swOld").value,n=$("#swNew").value,c=$("#swConfirm").value;if(!old||n.length<8)return Swal.showValidationMessage("กรุณากรอกข้อมูลให้ครบ และรหัสใหม่อย่างน้อย 8 ตัวอักษร");if(n!==c)return Swal.showValidationMessage("ยืนยันรหัสผ่านใหม่ไม่ตรงกัน");return{old,n};}
+        });
+        if(!r.isConfirmed)return;
+        await server("changePassword", token, r.value.old, r.value.n);
+        await notice("เปลี่ยนรหัสผ่านสำเร็จ");
       }
+      function renderAdmin(){
+        const s=ADMIN.summary||{};
+        $("#adminStats").innerHTML=[
+          ["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],
+          ["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังถูกยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]
+        ].map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join("");
+        if(ADMIN.role!=="ADMIN")return;
+        renderEquipmentAdmin();renderDepartmentAdmin();renderUserAdmin();renderSettings();renderLogs();
+      }
+      function adminTable(headers,rows){
+        return rows.length?`<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:'<div class="empty">ยังไม่มีข้อมูล</div>';
+      }
+      function activeBadge(v){return truth(v)?'<span class="badge s-ok">เปิดใช้งาน</span>':'<span class="badge s-no">ระงับ</span>'}
+      function truth(v){return v===true||["true","yes","y","1","เปิดใช้งาน"].includes(String(v).toLowerCase())}
+      function renderEquipmentAdmin(){
+        $("#equipmentAdmin").innerHTML=adminTable(["รหัส","อุปกรณ์","ประเภท/รุ่น","สถานะ","ใช้งาน","ดำเนินการ"],(ADMIN.equipment||[]).map((e,i)=>`<tr>
+          <td>${esc(e.equipment_id)}<br><span class="sub">${esc(e.asset_code||"")}</span></td><td><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.serial_number||"")}</span></td>
+          <td>${esc(e.category||"-")}<br><span class="sub">${esc([e.brand,e.model].filter(Boolean).join(" ")||"")}</span></td><td>${esc(e.availability_status||"-")}</td><td>${activeBadge(e.active)}</td>
+          <td><button class="mini-btn edit" onclick="equipmentForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('equipment','${esc(e.equipment_id)}',${!truth(e.active)})">${truth(e.active)?"ระงับ":"เปิด"}</button></td></tr>`));
+      }
+      async function equipmentForm(i){
+        const e=i===undefined?{}:ADMIN.equipment[i];
+        const r=await Swal.fire({title:e.equipment_id?"แก้ไขอุปกรณ์":"เพิ่มอุปกรณ์",width:760,html:
+          formGrid([["ชื่ออุปกรณ์ *","equipment_name",e.equipment_name],["รหัสทรัพย์สิน","asset_code",e.asset_code],["ประเภท","category",e.category],["ยี่ห้อ","brand",e.brand],["รุ่น","model",e.model],["Serial Number","serial_number",e.serial_number],["สภาพ","condition",e.condition||"ปกติ"],["สถานะ","availability_status",e.availability_status||"พร้อมใช้งาน"],["สถานที่เก็บ","current_location",e.current_location],["อุปกรณ์เสริม","default_accessories",e.default_accessories],["หมายเหตุ","note",e.note]]),
+          showCancelButton:true,confirmButtonText:"บันทึก",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",
+          preConfirm:()=>{const d=swalData();if(!d.equipment_name)return Swal.showValidationMessage("กรุณาระบุชื่ออุปกรณ์");return Object.assign(d,{equipment_id:e.equipment_id||"",active:e.equipment_id?truth(e.active):true});}});
+        if(!r.isConfirmed)return;await server("saveEquipment",token,r.value);await notice("บันทึกข้อมูลอุปกรณ์แล้ว");await reloadAdminAndPublic();
+      }
+      function renderDepartmentAdmin(){
+        $("#departmentAdmin").innerHTML=adminTable(["รหัส","หน่วยงาน","ผู้ประสานงาน","ลำดับ","ใช้งาน","ดำเนินการ"],(ADMIN.departments||[]).map((d,i)=>`<tr><td>${esc(d.department_id)}</td><td><b>${esc(d.department_name)}</b><br><span class="sub">${esc(d.short_name||"")}</span></td><td>${esc(d.contact_person||"-")}<br><span class="sub">${esc(d.phone||"")}</span></td><td>${esc(d.sort_order||"")}</td><td>${activeBadge(d.active)}</td><td><button class="mini-btn edit" onclick="departmentForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('department','${esc(d.department_id)}',${!truth(d.active)})">${truth(d.active)?"ระงับ":"เปิด"}</button></td></tr>`));
+      }
+      async function departmentForm(i){
+        const d=i===undefined?{}:ADMIN.departments[i];
+        const r=await Swal.fire({title:d.department_id?"แก้ไขหน่วยงาน":"เพิ่มหน่วยงาน",width:720,html:formGrid([["ชื่อหน่วยงาน *","department_name",d.department_name],["ชื่อย่อ","short_name",d.short_name],["ผู้ประสานงาน","contact_person",d.contact_person],["เบอร์โทร","phone",d.phone],["อีเมล","email",d.email,"email"],["ลำดับแสดง","sort_order",d.sort_order||999,"number"],["หมายเหตุ","note",d.note]]),showCancelButton:true,confirmButtonText:"บันทึก",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",preConfirm:()=>{const x=swalData();if(!x.department_name)return Swal.showValidationMessage("กรุณาระบุชื่อหน่วยงาน");return Object.assign(x,{department_id:d.department_id||"",active:d.department_id?truth(d.active):true});}});
+        if(!r.isConfirmed)return;await server("saveDepartment",token,r.value);await notice("บันทึกข้อมูลหน่วยงานแล้ว");await reloadAdminAndPublic();
+      }
+      function renderUserAdmin(){
+        $("#userAdmin").innerHTML=adminTable(["Username","ชื่อ–นามสกุล","หน่วยงาน","สิทธิ์","ใช้งาน","ดำเนินการ"],(ADMIN.users||[]).map((u,i)=>`<tr><td><b>${esc(u.username)}</b><br><span class="sub">${esc(u.user_id)}</span></td><td>${esc(u.full_name)}</td><td>${esc(u.department||"-")}</td><td>${esc(u.role)}</td><td>${activeBadge(u.active)}</td><td><button class="mini-btn edit" onclick="userForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('user','${esc(u.user_id)}',${!truth(u.active)})">${truth(u.active)?"ระงับ":"เปิด"}</button></td></tr>`));
+      }
+      async function userForm(i){
+        const u=i===undefined?{}:ADMIN.users[i],roles=["USER","OFFICER","APPROVER","ADMIN"];
+        const roleOptions=roles.map(x=>`<option ${u.role===x?"selected":""}>${x}</option>`).join("");
+        const depOptions=(ADMIN.departments||[]).map(x=>`<option ${u.department===x.department_name?"selected":""}>${esc(x.department_name)}</option>`).join("");
+        const html=`<div class="grid" style="text-align:left"><div><label>Username *</label><input class="swal-field" name="username" value="${esc(u.username||"")}"></div><div><label>ชื่อ–นามสกุล *</label><input class="swal-field" name="full_name" value="${esc(u.full_name||"")}"></div><div><label>สิทธิ์</label><select class="swal-field" name="role">${roleOptions}</select></div><div><label>หน่วยงาน</label><select class="swal-field" name="department"><option value="">-</option>${depOptions}</select></div><div><label>ตำแหน่ง</label><input class="swal-field" name="position" value="${esc(u.position||"")}"></div><div><label>เบอร์โทร</label><input class="swal-field" name="phone" value="${esc(u.phone||"")}"></div><div class="full"><label>${u.user_id?"รหัสผ่านใหม่ (เว้นว่างหากไม่เปลี่ยน)":"รหัสผ่านอย่างน้อย 8 ตัว *"}</label><input type="password" class="swal-field" name="password"></div></div>`;
+        const r=await Swal.fire({title:u.user_id?"แก้ไขผู้ใช้งาน":"เพิ่มผู้ใช้งาน",width:720,html,showCancelButton:true,confirmButtonText:"บันทึก",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",preConfirm:()=>{const x=swalData();if(!x.username||!x.full_name)return Swal.showValidationMessage("กรุณากรอก Username และชื่อ–นามสกุล");if(!u.user_id&&String(x.password).length<8)return Swal.showValidationMessage("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");return Object.assign(x,{user_id:u.user_id||"",active:u.user_id?truth(u.active):true});}});
+        if(!r.isConfirmed)return;await server("saveUser",token,r.value);await notice("บันทึกข้อมูลผู้ใช้งานแล้ว");await reloadAdminAndPublic();
+      }
+      function renderSettings(){
+        const map=Object.fromEntries((ADMIN.settings||[]).map(x=>[x.setting_key,x.setting_value]));
+        const fields=[["ชื่อระบบ","SYSTEM_NAME","text"],["คำนำหน้าเลขคำขอ","BOOKING_PREFIX","text"],["จำนวนวันที่ยืมสูงสุด","MAX_BORROW_DAYS","number"],["ชั่วโมงก่อนถือว่าล่าช้า","LATE_RETURN_HOURS","number"],["Google Drive Folder ID","DRIVE_FOLDER_ID","text"],["อีเมลผู้ดูแล","ADMIN_EMAIL","email"]];
+        $("#settingsForm").innerHTML=fields.map(x=>`<div><label>${x[0]}</label><input name="${x[1]}" type="${x[2]}" value="${esc(map[x[1]]||"")}"></div>`).join("")+
+          `<div class="form-check"><input type="checkbox" name="REQUIRE_APPROVAL" ${truth(map.REQUIRE_APPROVAL)?"checked":""}><label>ต้องอนุมัติก่อนยืม</label></div><div class="form-check"><input type="checkbox" name="ENABLE_EMAIL" ${truth(map.ENABLE_EMAIL)?"checked":""}><label>เปิดแจ้งเตือนอีเมล</label></div><div class="form-check"><input type="checkbox" name="ENABLE_LINE" ${truth(map.ENABLE_LINE)?"checked":""}><label>เปิดแจ้งเตือน LINE</label></div><div class="full actions"><button class="btn primary">บันทึกการตั้งค่า</button></div>`;
+        $("#settingsForm").onsubmit=saveSettingsForm;
+      }
+      async function saveSettingsForm(e){e.preventDefault();const f=new FormData(e.target),d=Object.fromEntries(f.entries());["REQUIRE_APPROVAL","ENABLE_EMAIL","ENABLE_LINE"].forEach(k=>d[k]=e.target.elements[k].checked?"TRUE":"FALSE");await server("saveSettings",token,d);await notice("บันทึกการตั้งค่าระบบแล้ว");await reloadAdminAndPublic();}
+      function renderLogs(){
+        $("#logAdmin").innerHTML=adminTable(["วันเวลา","ผู้ทำรายการ","การดำเนินการ","ข้อมูลอ้างอิง","รายละเอียด"],(ADMIN.logs||[]).map(l=>`<tr><td>${fmt(l.timestamp)}</td><td>${esc(l.user_name||"-")}</td><td>${esc(l.action||"-")}</td><td>${esc(l.reference_type||"")} ${esc(l.reference_id||"")}</td><td>${esc(l.detail||"-")}</td></tr>`));
+      }
+      function formGrid(fields){return `<div class="grid" style="text-align:left">${fields.map(x=>`<div><label>${x[0]}</label><input class="swal-field" name="${x[1]}" type="${x[3]||"text"}" value="${esc(x[2]||"")}"></div>`).join("")}</div>`}
+      function swalData(){return Object.fromEntries([...Swal.getHtmlContainer().querySelectorAll(".swal-field")].map(x=>[x.name,x.value.trim()]))}
+      async function toggleItem(type,id,active){
+        const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
+        await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
+      }
+      async function reloadAdminAndPublic(){await loadAdmin();DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");$("#equipment").innerHTML=DATA.equipment.map(e=>`<label class="eq"><input type="checkbox" name="equipmentIds" value="${esc(e.equipment_id)}"><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.asset_code||e.equipment_id)} · ${esc(e.category||"")}</span></label>`).join("")||'<div class="empty">ยังไม่มีอุปกรณ์ที่เปิดใช้งาน</div>';}
       function esc(v) {
         return String(v ?? "").replace(
           /[&<>'"]/g,
@@ -770,4 +890,3 @@
     </script>
   </body>
 </html>
-
