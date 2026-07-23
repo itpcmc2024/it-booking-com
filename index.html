@@ -137,18 +137,52 @@
       }
       .equipment-list {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 14px;
       }
-      .eq {
+      .equipment-card {
         border: 1px solid #e5e3f5;
-        border-radius: 15px;
-        padding: 12px;
-        background: #fafaff;
+        border-radius: 18px;
+        padding: 0;
+        overflow: hidden;
+        background: #fff;
+        cursor: pointer;
+        text-align: left;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
       }
-      .eq input {
-        width: auto;
-        margin-right: 8px;
+      .equipment-card:hover, .equipment-card:focus {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px #6f69a824;
+        border-color: #aaa2eb;
+      }
+      .equipment-thumb {
+        width: 100%;
+        aspect-ratio: 4/3;
+        display: block;
+        object-fit: cover;
+        background: linear-gradient(135deg,#eeecff,#dff5ef);
+      }
+      .equipment-card-body { padding: 12px; }
+      .equipment-card-body strong { display:block; font-size:15px; margin-bottom:5px; }
+      .equipment-placeholder {
+        aspect-ratio: 4/3;
+        display:grid;
+        place-items:center;
+        font-size:48px;
+        background:linear-gradient(135deg,#eeecff,#dff5ef);
+      }
+      .booking-step[hidden] { display:none !important; }
+      .step-title { margin-bottom:5px; }
+      .step-help { margin:0 0 16px; color:var(--muted); }
+      .selected-equipment {
+        display:flex; align-items:center; gap:12px; padding:12px;
+        background:#f6f5ff; border:1px solid #ddd9fb; border-radius:16px;
+      }
+      .selected-equipment img { width:86px; height:64px; object-fit:cover; border-radius:11px; }
+      .selected-equipment .equipment-placeholder { width:86px; aspect-ratio:auto; height:64px; font-size:28px; border-radius:11px; }
+      .equipment-photo-preview {
+        width:100%; max-height:220px; object-fit:contain; border-radius:12px;
+        margin-top:8px; background:#f5f5fb;
       }
       .primary {
         background: linear-gradient(90deg, #bcb4ff, #9edfcf);
@@ -422,8 +456,24 @@
       </section>
       <section id="booking" class="page">
         <div class="dashboard-strip public-dashboard"></div>
-        <form class="card" id="bookingForm">
+        <div class="card booking-step" id="equipmentPicker">
+          <h2 class="title step-title">เลือกอุปกรณ์ที่ต้องการยืม</h2>
+          <p class="step-help">เลือกประเภทและช่วงวันเวลา ระบบจะแสดงเฉพาะอุปกรณ์ที่ว่าง</p>
+          <div class="grid">
+            <div><label class="req">ประเภทอุปกรณ์</label>
+              <select id="bookingCategory"><option value="">เลือกประเภทอุปกรณ์</option><option>Notebook</option><option>PC</option><option>Projector</option><option>TV</option></select>
+            </div>
+            <div></div>
+            <div><label class="req">วันเวลารับ</label><input id="pickerBorrow" type="datetime-local"></div>
+            <div><label class="req">วันเวลาคืน</label><input id="pickerReturn" type="datetime-local"></div>
+          </div>
+          <div id="availableEquipmentMessage" class="empty">กรุณาเลือกประเภทอุปกรณ์และวันเวลาที่ต้องการยืม</div>
+          <div id="equipmentGallery" class="equipment-list"></div>
+        </div>
+        <form class="card booking-step" id="bookingForm" hidden>
           <h2 class="title">แบบฟอร์มขอยืมอุปกรณ์</h2>
+          <div id="selectedEquipmentSummary" class="selected-equipment" style="margin-bottom:16px"></div>
+          <input type="hidden" name="equipmentIds" id="equipment">
           <div class="grid">
             <div>
               <label class="req">ชื่อ–นามสกุล</label
@@ -445,32 +495,22 @@
             </div>
             <div>
               <label class="req">วันเวลารับ</label
-              ><input type="datetime-local" name="borrowDateTime" required />
+              ><input type="datetime-local" name="borrowDateTime" required readonly />
             </div>
             <div>
               <label class="req">วันเวลาคืน</label
-              ><input type="datetime-local" name="returnDateTime" required />
+              ><input type="datetime-local" name="returnDateTime" required readonly />
             </div>
             <div class="full">
               <label class="req">วัตถุประสงค์</label
               ><textarea name="purpose" required></textarea>
             </div>
             <div class="full">
-              <label class="req">เลือกอุปกรณ์</label>
-              <select id="equipment" name="equipmentIds" required>
-                <option value="">กรุณาเลือกวันเวลารับ–คืนก่อน</option>
-              </select>
-            </div>
-            <div class="full">
               <label>หมายเหตุ</label><textarea name="note"></textarea>
-            </div>
-            <div class="full">
-              <label>ไฟล์แนบ (ไม่เกิน 5 MB)</label
-              ><input type="file" name="attachment" />
             </div>
           </div>
           <div class="actions">
-            <button type="reset" class="btn">ล้างข้อมูล</button
+            <button type="button" class="btn" onclick="backToEquipmentPicker()">← เลือกอุปกรณ์ใหม่</button
             ><button class="btn primary">ส่งคำขอยืม</button>
           </div>
         </form>
@@ -661,13 +701,16 @@
           DATA.departments
             .map((d) => `<option>${esc(d.department_name)}</option>`)
             .join("");
-        renderAvailableEquipment([]);
         refreshUser();
         loadCalendar();
         setBorrowDateMinimums();
       }
       function localDateTimeValue(d=new Date()){const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
-      function setBorrowDateMinimums(){const form=$("#bookingForm"),now=localDateTimeValue();form.elements.borrowDateTime.min=now;form.elements.returnDateTime.min=now;}
+      function setBorrowDateMinimums(){
+        const now=localDateTimeValue(),form=$("#bookingForm");
+        form.elements.borrowDateTime.min=now; form.elements.returnDateTime.min=now;
+        $("#pickerBorrow").min=now; $("#pickerReturn").min=now;
+      }
       async function loadCalendar() {
         let a = new Date(month.getFullYear(), month.getMonth(), 1),
           b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
@@ -757,47 +800,55 @@
       $("#bookingForm").onsubmit = async (e) => {
         e.preventDefault();
         let f = new FormData(e.target),
-          file = f.get("attachment"),
           ids = f.getAll("equipmentIds").filter(Boolean);
         if (ids.length !== 1)
           return notice("กรุณาเลือกอุปกรณ์ 1 รายการ", "warning");
         if(new Date(f.get("borrowDateTime"))<new Date())
           return notice("ไม่สามารถยื่นคำขอยืมย้อนหลังได้", "warning");
-        let attachment = null;
-        if (file && file.size) {
-          if (file.size > 5 * 1024 * 1024)
-            return notice("ไฟล์ต้องไม่เกิน 5 MB", "warning");
-          attachment = {
-            name: file.name,
-            type: file.type,
-            data: await dataUrl(file),
-          };
-        }
         let p = Object.fromEntries(f.entries());
         p.equipmentIds = ids;
-        p.attachment = attachment;
         let r = await server("createBooking", p);
         await notice("เลขที่คำขอ " + r.id, "success", "ส่งคำขอสำเร็จ");
         e.target.reset();
+        backToEquipmentPicker(true);
         setBorrowDateMinimums();
         await refreshInitialData();
         month = new Date(p.borrowDateTime);
         await loadCalendar();
       };
-      async function refreshAvailableEquipment(){
-        const form=$("#bookingForm"),a=form.elements.borrowDateTime.value,b=form.elements.returnDateTime.value;
-        if(!a||!b){renderAvailableEquipment([]);return;}
-        if(new Date(b)<=new Date(a)){renderAvailableEquipment([],true);return;}
-        const list=await server("getAvailableEquipment",a,b);
-        renderAvailableEquipment(list);
+      let availableEquipment=[];
+      ["bookingCategory","pickerBorrow","pickerReturn"].forEach(id=>$("#"+id).addEventListener("change",refreshEquipmentGallery));
+      async function refreshEquipmentGallery(){
+        const category=$("#bookingCategory").value,a=$("#pickerBorrow").value,b=$("#pickerReturn").value;
+        $("#equipmentGallery").innerHTML="";
+        if(!category||!a||!b){
+          $("#availableEquipmentMessage").textContent="กรุณาเลือกประเภทอุปกรณ์และวันเวลาที่ต้องการยืม";
+          return;
+        }
+        if(new Date(a)<new Date()){ $("#availableEquipmentMessage").textContent="ไม่สามารถเลือกวันเวลาย้อนหลังได้"; return; }
+        if(new Date(b)<=new Date(a)){ $("#availableEquipmentMessage").textContent="วันเวลาคืนต้องมากกว่าวันเวลารับ"; return; }
+        availableEquipment=(await server("getAvailableEquipment",a,b,category))||[];
+        $("#availableEquipmentMessage").textContent=availableEquipment.length?`พบอุปกรณ์ว่าง ${availableEquipment.length} รายการ — คลิกรูปเพื่อยื่นคำขอ`:"ไม่มีอุปกรณ์ว่างในประเภทและช่วงเวลานี้";
+        $("#equipmentGallery").innerHTML=availableEquipment.map((e,i)=>`<button type="button" class="equipment-card" onclick="chooseEquipment(${i})">
+          ${equipmentImage(e)}
+          <span class="equipment-card-body"><strong>${esc(e.equipment_name)}</strong><span class="sub">${esc([e.brand,e.model].filter(Boolean).join(" ")||e.category||"")}</span><br><span class="sub">${esc(e.current_location||"")}</span></span>
+        </button>`).join("");
       }
-      $("#bookingForm").elements.borrowDateTime.addEventListener("change",refreshAvailableEquipment);
-      $("#bookingForm").elements.returnDateTime.addEventListener("change",refreshAvailableEquipment);
-      function renderAvailableEquipment(list,invalid){
-        const form=$("#bookingForm"),hasRange=form.elements.borrowDateTime.value&&form.elements.returnDateTime.value;
-        const source=hasRange&&!invalid?list:[];
-        $("#equipment").innerHTML=`<option value="">${invalid?"กรุณาเลือกวันเวลาคืนให้มากกว่าวันเวลารับ":!hasRange?"กรุณาเลือกวันเวลารับ–คืนก่อน":source.length?"เลือกอุปกรณ์":"ไม่มีอุปกรณ์ว่างในช่วงเวลานี้"}</option>`+
-          source.map(e=>`<option value="${esc(e.equipment_id)}">${esc(e.equipment_name)}</option>`).join("");
+      function equipmentImage(e){
+        return e&&e.image_url?`<img class="equipment-thumb" src="${esc(e.image_url)}" alt="${esc(e.equipment_name||"รูปอุปกรณ์")}" loading="lazy" onerror="this.outerHTML='<span class=&quot;equipment-placeholder&quot;>💻</span>'">`:'<span class="equipment-placeholder">💻</span>';
+      }
+      function chooseEquipment(i){
+        const e=availableEquipment[i],form=$("#bookingForm"); if(!e)return;
+        form.elements.equipmentIds.value=e.equipment_id;
+        form.elements.borrowDateTime.value=$("#pickerBorrow").value;
+        form.elements.returnDateTime.value=$("#pickerReturn").value;
+        $("#selectedEquipmentSummary").innerHTML=`${equipmentImage(e)}<div><strong>${esc(e.equipment_name)}</strong><div class="sub">${esc([e.category,e.brand,e.model].filter(Boolean).join(" · "))}</div><div class="sub">รับ ${fmt($("#pickerBorrow").value)} · คืน ${fmt($("#pickerReturn").value)}</div></div>`;
+        $("#equipmentPicker").hidden=true; form.hidden=false; form.scrollIntoView({behavior:"smooth",block:"start"});
+      }
+      function backToEquipmentPicker(clear=false){
+        const form=$("#bookingForm"); form.hidden=true; $("#equipmentPicker").hidden=false;
+        if(clear){ $("#bookingCategory").value="";$("#pickerBorrow").value="";$("#pickerReturn").value="";availableEquipment=[];$("#equipmentGallery").innerHTML="";$("#availableEquipmentMessage").textContent="กรุณาเลือกประเภทอุปกรณ์และวันเวลาที่ต้องการยืม"; }
+        $("#equipmentPicker").scrollIntoView({behavior:"smooth",block:"start"});
       }
       function dataUrl(f) {
         return new Promise((ok) => {
@@ -905,8 +956,8 @@
       function activeBadge(v){return truth(v)?'<span class="badge s-ok">เปิดใช้งาน</span>':'<span class="badge s-no">ระงับ</span>'}
       function truth(v){return v===true||["true","yes","y","1","เปิดใช้งาน"].includes(String(v).toLowerCase())}
       function renderEquipmentAdmin(){
-        $("#equipmentAdmin").innerHTML=adminTable(["รหัส","อุปกรณ์","ประเภท/รุ่น","สถานะ","ใช้งาน","ดำเนินการ"],(ADMIN.equipment||[]).map((e,i)=>`<tr>
-          <td>${esc(e.equipment_id)}<br><span class="sub">${esc(e.asset_code||"")}</span></td><td><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.serial_number||"")}</span></td>
+        $("#equipmentAdmin").innerHTML=adminTable(["รูป","รหัส","อุปกรณ์","ประเภท/รุ่น","สถานะ","ใช้งาน","ดำเนินการ"],(ADMIN.equipment||[]).map((e,i)=>`<tr>
+          <td>${e.image_url?`<img src="${esc(e.image_url)}" alt="" style="width:68px;height:52px;object-fit:cover;border-radius:9px">`:"-"}</td><td>${esc(e.equipment_id)}<br><span class="sub">${esc(e.asset_code||"")}</span></td><td><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.serial_number||"")}</span></td>
           <td>${esc(e.category||"-")}<br><span class="sub">${esc([e.brand,e.model].filter(Boolean).join(" ")||"")}</span></td><td>${esc(e.availability_status||"-")}</td><td>${activeBadge(e.active)}</td>
           <td><button class="mini-btn edit" onclick="equipmentForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('equipment','${esc(e.equipment_id)}',${!truth(e.active)})">${truth(e.active)?"ระงับ":"เปิด"}</button></td></tr>`));
       }
@@ -928,12 +979,13 @@
           <div><label>สถานะ</label><select class="swal-field" name="availability_status">${statusOptions}</select></div>
           <div><label>สถานที่เก็บ</label><select class="swal-field" name="current_location"><option value="">เลือกสถานที่เก็บ</option>${locationOptions}</select></div>
           <div><label>อุปกรณ์เสริม</label><div class="swal-check-group">${accessoryOptions}</div></div>
+          <div class="full"><label>รูปภาพอุปกรณ์ (JPG, PNG หรือ WEBP ไม่เกิน 5 MB)</label><input id="equipmentImageFile" type="file" accept="image/jpeg,image/png,image/webp">${e.image_url?`<img class="equipment-photo-preview" src="${esc(e.image_url)}" alt="รูปอุปกรณ์ปัจจุบัน">`:""}</div>
           ${formInput("หมายเหตุ","note",e.note)}
         </div>`;
         const r=await Swal.fire({title:e.equipment_id?"แก้ไขอุปกรณ์":"เพิ่มอุปกรณ์",width:760,html:
           equipmentHtml,
           showCancelButton:true,confirmButtonText:"บันทึก",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",
-          preConfirm:()=>{const d=swalData();d.default_accessories=[...Swal.getHtmlContainer().querySelectorAll(".swal-accessory:checked")].map(x=>x.value).join(",");if(!d.equipment_name)return Swal.showValidationMessage("กรุณาระบุชื่ออุปกรณ์");return Object.assign(d,{equipment_id:e.equipment_id||"",active:e.equipment_id?truth(e.active):true});}});
+          preConfirm:async()=>{const d=swalData(),file=Swal.getHtmlContainer().querySelector("#equipmentImageFile").files[0];d.default_accessories=[...Swal.getHtmlContainer().querySelectorAll(".swal-accessory:checked")].map(x=>x.value).join(",");if(!d.equipment_name)return Swal.showValidationMessage("กรุณาระบุชื่ออุปกรณ์");if(file){if(file.size>5*1024*1024)return Swal.showValidationMessage("รูปภาพต้องมีขนาดไม่เกิน 5 MB");if(!["image/jpeg","image/png","image/webp"].includes(file.type))return Swal.showValidationMessage("รองรับเฉพาะไฟล์ JPG, PNG หรือ WEBP");d.image={name:file.name,type:file.type,data:await dataUrl(file)};}return Object.assign(d,{equipment_id:e.equipment_id||"",image_url:e.image_url||"",active:e.equipment_id?truth(e.active):true});}});
         if(!r.isConfirmed)return;await server("saveEquipment",token,r.value);await notice("บันทึกข้อมูลอุปกรณ์แล้ว");await reloadAdminAndPublic();
       }
       function renderDepartmentAdmin(){
