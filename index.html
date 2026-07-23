@@ -272,6 +272,44 @@
       .data-controls input { flex:1 1 180px; min-width:120px; }
       .data-controls select { width:auto; min-width:115px; }
       .dashboard-range-note { grid-column:1/-1; color:#738096; font-size:12px; margin:-4px 2px 2px; }
+      .user-menu { position:relative; }
+      .user-menu-toggle {
+        border:0;
+        border-radius:14px;
+        padding:10px 14px;
+        background:#ffffffb8;
+        color:#334155;
+        cursor:pointer;
+        font:inherit;
+        font-weight:600;
+      }
+      .user-menu-list {
+        display:none;
+        position:absolute;
+        right:0;
+        top:calc(100% + 7px);
+        z-index:30;
+        min-width:190px;
+        padding:7px;
+        border:1px solid #e6e5f1;
+        border-radius:14px;
+        background:#fff;
+        box-shadow:var(--shadow);
+      }
+      .user-menu.open .user-menu-list { display:block; }
+      .user-menu-list button {
+        display:block;
+        width:100%;
+        border:0;
+        border-radius:10px;
+        padding:10px 12px;
+        background:transparent;
+        text-align:left;
+        cursor:pointer;
+        font:inherit;
+      }
+      .user-menu-list button:hover { background:#f2f0ff; }
+      .user-menu-list .logout-item { color:#c64261; }
       .s-wait {
         background: var(--yellow);
       }
@@ -551,14 +589,6 @@
           <div class="card">
             <div class="calendar-head">
               <div><h2 class="title" style="margin-bottom:2px">ศูนย์จัดการระบบ</h2><span class="sub" id="adminRole"></span></div>
-              <div>
-                <button class="btn" onclick="openPassword()">
-                  เปลี่ยนรหัสผ่าน
-                </button>
-                <button class="btn danger" onclick="logout()">
-                  ออกจากระบบ
-                </button>
-              </div>
             </div>
             <div class="admin-tabs" id="adminTabs">
               <button class="btn active" data-admin="requests">📋 คำขอยืม</button>
@@ -721,6 +751,18 @@
         form.elements.borrowDateTime.min=now; form.elements.returnDateTime.min=now;
         $("#pickerBorrow").min=now; $("#pickerReturn").min=now;
       }
+      function validatePickerDates(showAlert=false){
+        const a=$("#pickerBorrow").value,b=$("#pickerReturn").value;
+        $("#pickerReturn").min=a||localDateTimeValue();
+        if(!a||!b)return true;
+        if(new Date(b)<=new Date(a)){
+          $("#pickerReturn").setCustomValidity("วันเวลาคืนต้องมากกว่าวันเวลารับ");
+          if(showAlert) notice("วันเวลาคืนต้องมากกว่าวันเวลารับ กรุณาเลือกวันเวลาใหม่", "warning");
+          return false;
+        }
+        $("#pickerReturn").setCustomValidity("");
+        return true;
+      }
       async function loadCalendar() {
         let a = new Date(month.getFullYear(), month.getMonth(), 1),
           b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
@@ -816,6 +858,8 @@
           return notice("กรุณาเลือกอุปกรณ์ 1 รายการ", "warning");
         if(new Date(f.get("borrowDateTime"))<new Date())
           return notice("ไม่สามารถยื่นคำขอยืมย้อนหลังได้", "warning");
+        if(new Date(f.get("returnDateTime"))<=new Date(f.get("borrowDateTime")))
+          return notice("วันเวลาคืนต้องมากกว่าวันเวลารับ กรุณาเลือกวันเวลาใหม่", "warning");
         let p = Object.fromEntries(f.entries());
         p.equipmentIds = ids;
         let r = await server("createBooking", p);
@@ -829,7 +873,9 @@
       };
       let availableEquipment=[];
       let availabilityRequest=0;
-      ["bookingCategory","pickerBorrow","pickerReturn"].forEach(id=>$("#"+id).addEventListener("change",refreshEquipmentGallery));
+      $("#bookingCategory").addEventListener("change",refreshEquipmentGallery);
+      $("#pickerBorrow").addEventListener("change",()=>{validatePickerDates(false);refreshEquipmentGallery();});
+      $("#pickerReturn").addEventListener("change",()=>{if(validatePickerDates(true))refreshEquipmentGallery();else{$("#equipmentGallery").innerHTML="";renderBookingDashboard();}});
       async function refreshEquipmentGallery(){
         const category=$("#bookingCategory").value,a=$("#pickerBorrow").value,b=$("#pickerReturn").value;
         $("#equipmentGallery").innerHTML="";
@@ -839,7 +885,7 @@
           return;
         }
         if(new Date(a)<new Date()){ $("#availableEquipmentMessage").textContent="ไม่สามารถเลือกวันเวลาย้อนหลังได้";renderBookingDashboard();return; }
-        if(new Date(b)<=new Date(a)){ $("#availableEquipmentMessage").textContent="วันเวลาคืนต้องมากกว่าวันเวลารับ";renderBookingDashboard();return; }
+        if(!validatePickerDates(false)){ $("#availableEquipmentMessage").textContent="วันเวลาคืนต้องมากกว่าวันเวลารับ";renderBookingDashboard();return; }
         const request=++availabilityRequest;
         const result=await Promise.all([
           server("getAvailableEquipment",a,b,category),
@@ -908,10 +954,13 @@
         }
       }
       function refreshUser() {
-        $("#who").textContent = user ? "👤 " + user.name : "";
+        $("#who").innerHTML = user ? `<div class="user-menu" id="userMenu"><button type="button" class="user-menu-toggle" onclick="toggleUserMenu(event)">👤 ${esc(user.name||"ผู้ดูแลระบบ")} ▾</button><div class="user-menu-list"><button type="button" onclick="openPassword();closeUserMenu()">🔑 เปลี่ยนรหัสผ่าน</button><button type="button" class="logout-item" onclick="closeUserMenu();logout()">🚪 ออกจากระบบ</button></div></div>` : "";
         $("#loginBox").style.display = token ? "none" : "block";
         $("#adminBox").style.display = token ? "block" : "none";
       }
+      function toggleUserMenu(e){e.stopPropagation();const menu=$("#userMenu");if(menu)menu.classList.toggle("open");}
+      function closeUserMenu(){const menu=$("#userMenu");if(menu)menu.classList.remove("open");}
+      document.addEventListener("click",closeUserMenu);
       async function logout() {
         const ask=await Swal.fire({icon:"question",title:"ออกจากระบบ?",showCancelButton:true,confirmButtonText:"ออกจากระบบ",cancelButtonText:"ยกเลิก",confirmButtonColor:"#ef7898"});
         if(!ask.isConfirmed)return;
@@ -1067,7 +1116,7 @@
         const el=$("#bookingDashboard");if(!el)return;
         const s=summary||DATA.summary||{},ranged=!!summary;
         const cards=ranged
-          ? [["💻","อุปกรณ์ในประเภท",s.totalEquipment||0],["✅","ว่างช่วงนี้",s.available||0],["⏳","รออนุมัติช่วงนี้",s.waiting||0],["📦","ถูกจอง/ใช้งาน",s.inUse||0],["⚠️","คืนล่าช้า",s.late||0]]
+          ? [["💻","อุปกรณ์ในประเภท",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติช่วงนี้",s.waiting||0],["📦","ถูกจอง/ใช้งาน",s.inUse||0],["⚠️","คืนล่าช้า",s.late||0]]
           : [["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]];
         el.innerHTML=cards.map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join("")+
           (ranged?'<div class="dashboard-range-note">สรุปตามประเภทและช่วงวันเวลาที่เลือก</div>':"");
