@@ -622,6 +622,8 @@
         month = new Date(),
         events = [],
         ADMIN = null,
+        adminLoadedAt = 0,
+        publicBookingsCache = { rows: [], loadedAt: 0 },
         token = localStorage.getItem("eqToken") || "",
         user = JSON.parse(localStorage.getItem("eqUser") || "null");
       const $ = (s) => document.querySelector(s),
@@ -721,8 +723,8 @@
             $$(".page").forEach((x) => x.classList.remove("active"));
             $("#" + b.dataset.page).classList.add("active");
             if (b.dataset.page === "calendar") loadCalendar();
-            if (b.dataset.page === "status") search();
-            if (b.dataset.page === "admin" && token) loadAdmin();
+            if (b.dataset.page === "status") search(false);
+            if (b.dataset.page === "admin" && token && (!ADMIN || Date.now()-adminLoadedAt>60000)) loadAdmin();
           }),
       );
       $("#adminTabs").onclick = (e) => {
@@ -743,7 +745,6 @@
             .map((d) => `<option>${esc(d.department_name)}</option>`)
             .join("");
         refreshUser();
-        loadCalendar();
         setBorrowDateMinimums();
       }
       function localDateTimeValue(d=new Date()){const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
@@ -885,7 +886,8 @@
         setBorrowDateMinimums();
         month = new Date(p.borrowDateTime);
         // งานโหลดข้อมูลเต็มทำเบื้องหลัง ผู้ใช้ไม่ต้องรอหลังเห็นผลบันทึกสำเร็จ
-        Promise.allSettled([refreshInitialData(),loadCalendar()]);
+        publicBookingsCache={rows:[],loadedAt:0};
+        refreshInitialData().catch(()=>{});
       };
       let availableEquipment=[];
       let availabilityRequest=0;
@@ -943,8 +945,12 @@
           r.readAsDataURL(f);
         });
       }
-      async function search() {
-        let rows = await server("searchBookings", "");
+      async function search(force=false) {
+        let rows=publicBookingsCache.rows;
+        if(force || !rows.length || Date.now()-publicBookingsCache.loadedAt>60000){
+          rows = await server("searchBookings", "");
+          publicBookingsCache={rows,loadedAt:Date.now()};
+        }
         renderRows(rows, "#results", false);
       }
       function renderRows(rows, target, admin) {
@@ -993,6 +999,7 @@
       async function loadAdmin() {
         try {
           ADMIN = await server("getAdminData", token);
+          adminLoadedAt=Date.now();
           $("#adminRole").textContent="เข้าสู่ระบบโดย "+(user?.name||"")+" · สิทธิ์ "+ADMIN.role;
           $$(".admin-only").forEach(x=>x.style.display=ADMIN.role==="ADMIN"?"":"none");
           renderRows(ADMIN.bookings, "#adminResults", true);
@@ -1037,7 +1044,6 @@
         const s=ADMIN.summary||{};
         if(ADMIN.role!=="ADMIN")return;
         renderEquipmentAdmin();renderDepartmentAdmin();renderUserAdmin();renderSettings();renderLogs();
-        setTimeout(enhanceAdminTables,0);
       }
       function adminTable(headers,rows){
         return rows.length?`<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:'<div class="empty">ยังไม่มีข้อมูล</div>';
@@ -1045,10 +1051,11 @@
       function activeBadge(v){return truth(v)?'<span class="badge s-ok">เปิดใช้งาน</span>':'<span class="badge s-no">ระงับ</span>'}
       function truth(v){return v===true||["true","yes","y","1","เปิดใช้งาน"].includes(String(v).toLowerCase())}
       function renderEquipmentAdmin(){
-        $("#equipmentAdmin").innerHTML=adminTable(["รูป","รหัส","อุปกรณ์","ประเภท/รุ่น","สถานะ","ใช้งาน","ดำเนินการ"],(ADMIN.equipment||[]).map((e,i)=>`<tr>
+        const rows=(ADMIN.equipment||[]).map((e,i)=>Object.assign({},e,{_index:i,_sortValue:String(e.equipment_name||e.equipment_id||"")}));
+        renderDataTable("#equipmentAdmin",rows,"admin-equipment",(pageRows)=>adminTable(["รูป","รหัส","อุปกรณ์","ประเภท/รุ่น","สถานะ","ใช้งาน","ดำเนินการ"],pageRows.map(e=>`<tr>
           <td>${e.image_url?`<img src="${esc(e.image_url)}" alt="" style="width:68px;height:52px;object-fit:cover;border-radius:9px">`:"-"}</td><td>${esc(e.equipment_id)}<br><span class="sub">${esc(e.asset_code||"")}</span></td><td><b>${esc(e.equipment_name)}</b><br><span class="sub">${esc(e.serial_number||"")}</span></td>
           <td>${esc(e.category||"-")}<br><span class="sub">${esc([e.brand,e.model].filter(Boolean).join(" ")||"")}</span></td><td>${esc(e.availability_status||"-")}</td><td>${activeBadge(e.active)}</td>
-          <td><button class="mini-btn edit" onclick="equipmentForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('equipment','${esc(e.equipment_id)}',${!truth(e.active)})">${truth(e.active)?"ระงับ":"เปิด"}</button></td></tr>`));
+          <td><button class="mini-btn edit" onclick="equipmentForm(${e._index})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('equipment','${esc(e.equipment_id)}',${!truth(e.active)})">${truth(e.active)?"ระงับ":"เปิด"}</button></td></tr>`)));
       }
       async function equipmentForm(i){
         const e=i===undefined?{}:ADMIN.equipment[i];
@@ -1078,7 +1085,8 @@
         if(!r.isConfirmed)return;await server("saveEquipment",token,r.value);await notice("บันทึกข้อมูลอุปกรณ์แล้ว");await reloadAdminAndPublic();
       }
       function renderDepartmentAdmin(){
-        $("#departmentAdmin").innerHTML=adminTable(["รหัส","หน่วยงาน","ผู้ประสานงาน","ลำดับ","ใช้งาน","ดำเนินการ"],(ADMIN.departments||[]).map((d,i)=>`<tr><td>${esc(d.department_id)}</td><td><b>${esc(d.department_name)}</b><br><span class="sub">${esc(d.short_name||"")}</span></td><td>${esc(d.contact_person||"-")}<br><span class="sub">${esc(d.phone||"")}</span></td><td>${esc(d.sort_order||"")}</td><td>${activeBadge(d.active)}</td><td><button class="mini-btn edit" onclick="departmentForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('department','${esc(d.department_id)}',${!truth(d.active)})">${truth(d.active)?"ระงับ":"เปิด"}</button></td></tr>`));
+        const rows=(ADMIN.departments||[]).map((d,i)=>Object.assign({},d,{_index:i,_sortValue:String(d.department_name||d.department_id||"")}));
+        renderDataTable("#departmentAdmin",rows,"admin-departments",(pageRows)=>adminTable(["รหัส","หน่วยงาน","ผู้ประสานงาน","ลำดับ","ใช้งาน","ดำเนินการ"],pageRows.map(d=>`<tr><td>${esc(d.department_id)}</td><td><b>${esc(d.department_name)}</b><br><span class="sub">${esc(d.short_name||"")}</span></td><td>${esc(d.contact_person||"-")}<br><span class="sub">${esc(d.phone||"")}</span></td><td>${esc(d.sort_order||"")}</td><td>${activeBadge(d.active)}</td><td><button class="mini-btn edit" onclick="departmentForm(${d._index})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('department','${esc(d.department_id)}',${!truth(d.active)})">${truth(d.active)?"ระงับ":"เปิด"}</button></td></tr>`)));
       }
       async function departmentForm(i){
         const d=i===undefined?{}:ADMIN.departments[i];
@@ -1086,7 +1094,8 @@
         if(!r.isConfirmed)return;await server("saveDepartment",token,r.value);await notice("บันทึกข้อมูลหน่วยงานแล้ว");await reloadAdminAndPublic();
       }
       function renderUserAdmin(){
-        $("#userAdmin").innerHTML=adminTable(["Username","ชื่อ–นามสกุล","หน่วยงาน","สิทธิ์","ใช้งาน","ดำเนินการ"],(ADMIN.users||[]).map((u,i)=>`<tr><td><b>${esc(u.username)}</b><br><span class="sub">${esc(u.user_id)}</span></td><td>${esc(u.full_name)}</td><td>${esc(u.department||"-")}</td><td>${esc(u.role)}</td><td>${activeBadge(u.active)}</td><td><button class="mini-btn edit" onclick="userForm(${i})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('user','${esc(u.user_id)}',${!truth(u.active)})">${truth(u.active)?"ระงับ":"เปิด"}</button></td></tr>`));
+        const rows=(ADMIN.users||[]).map((u,i)=>Object.assign({},u,{_index:i,_sortValue:String(u.full_name||u.username||"")}));
+        renderDataTable("#userAdmin",rows,"admin-users",(pageRows)=>adminTable(["Username","ชื่อ–นามสกุล","หน่วยงาน","สิทธิ์","ใช้งาน","ดำเนินการ"],pageRows.map(u=>`<tr><td><b>${esc(u.username)}</b><br><span class="sub">${esc(u.user_id)}</span></td><td>${esc(u.full_name)}</td><td>${esc(u.department||"-")}</td><td>${esc(u.role)}</td><td>${activeBadge(u.active)}</td><td><button class="mini-btn edit" onclick="userForm(${u._index})">แก้ไข</button><button class="mini-btn off" onclick="toggleItem('user','${esc(u.user_id)}',${!truth(u.active)})">${truth(u.active)?"ระงับ":"เปิด"}</button></td></tr>`)));
       }
       async function userForm(i){
         const u=i===undefined?{}:ADMIN.users[i],roles=["ADMIN","USER"];
@@ -1105,7 +1114,8 @@
       }
       async function saveSettingsForm(e){e.preventDefault();const f=new FormData(e.target),d=Object.fromEntries(f.entries());["REQUIRE_APPROVAL","ENABLE_EMAIL","ENABLE_LINE"].forEach(k=>d[k]=e.target.elements[k].checked?"TRUE":"FALSE");await server("saveSettings",token,d);await notice("บันทึกการตั้งค่าระบบแล้ว");await reloadAdminAndPublic();}
       function renderLogs(){
-        $("#logAdmin").innerHTML=adminTable(["วันเวลา","ผู้ทำรายการ","การดำเนินการ","ข้อมูลอ้างอิง","รายละเอียด"],(ADMIN.logs||[]).map(l=>`<tr><td>${fmt(l.timestamp)}</td><td>${esc(l.user_name||"-")}</td><td>${esc(l.action||"-")}</td><td>${esc(l.reference_type||"")} ${esc(l.reference_id||"")}</td><td>${esc(l.detail||"-")}</td></tr>`));
+        const rows=(ADMIN.logs||[]).map(l=>Object.assign({},l,{_sortValue:String(l.timestamp||"")}));
+        renderDataTable("#logAdmin",rows,"admin-logs",(pageRows)=>adminTable(["วันเวลา","ผู้ทำรายการ","การดำเนินการ","ข้อมูลอ้างอิง","รายละเอียด"],pageRows.map(l=>`<tr><td>${fmt(l.timestamp)}</td><td>${esc(l.user_name||"-")}</td><td>${esc(l.action||"-")}</td><td>${esc(l.reference_type||"")} ${esc(l.reference_id||"")}</td><td>${esc(l.detail||"-")}</td></tr>`)));
       }
       function formGrid(fields){return `<div class="grid" style="text-align:left">${fields.map(x=>`<div><label>${x[0]}</label><input class="swal-field" name="${x[1]}" type="${x[3]||"text"}" value="${esc(x[2]||"")}"></div>`).join("")}</div>`}
       function formInput(label,name,value,type="text"){return `<div><label>${label}</label><input class="swal-field" name="${name}" type="${type}" value="${esc(value||"")}"></div>`}
@@ -1144,10 +1154,11 @@
           (ranged?'<div class="dashboard-range-note">สรุปตามประเภทและช่วงวันเวลาที่เลือก</div>':"");
       }
       const tableStates={};
+      function debounce(fn,wait=180){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),wait)}}
       function renderDataTable(target,rows,key,renderer){
         tableStates[key]=tableStates[key]||{q:"",sort:"desc",size:10,page:1};
         const s=tableStates[key], filtered=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(s.q.toLowerCase()))
-          .sort((a,b)=>(String(a.created_at||a.booking_id||"").localeCompare(String(b.created_at||b.booking_id||"")))*(s.sort==="asc"?1:-1));
+          .sort((a,b)=>(String(a._sortValue||a.created_at||a.booking_id||"").localeCompare(String(b._sortValue||b.created_at||b.booking_id||""),"th"))*(s.sort==="asc"?1:-1));
         const total=Math.max(1,Math.ceil(filtered.length/s.size));s.page=Math.min(s.page,total);
         const part=filtered.slice((s.page-1)*s.size,s.page*s.size);
         const container=$(target);
@@ -1155,7 +1166,7 @@
           container.innerHTML=`<div class="data-controls"><input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select>${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn">ส่งออก CSV</button><span class="sub"></span><button class="btn">‹</button><button class="btn">›</button></div><div class="data-table-body"></div>`;
           const [q,sort,size,exportBtn,pageLabel,prev,next]=container.querySelector(".data-controls").children;
           q.value=s.q;sort.value=s.sort;size.value=String(s.size);
-          q.oninput=()=>tableChange(key,"q",q.value,target);
+          q.oninput=debounce(()=>tableChange(key,"q",q.value,target),180);
           sort.onchange=()=>tableChange(key,"sort",sort.value,target);
           size.onchange=()=>tableChange(key,"size",size.value,target);
           exportBtn.onclick=()=>exportRows(key);
@@ -1169,10 +1180,8 @@
       function tableChange(key,field,value,target){const s=tableStates[key];s[field]=field==="size"?+value:value;s.page=1;renderDataTable(target,s.rows,key,s.renderer)}
       function tablePage(key,n,target){const s=tableStates[key];s.page=Math.max(1,s.page+n);renderDataTable(target,s.rows,key,s.renderer)}
       function exportRows(key){const s=tableStates[key],rows=s.rows.filter(r=>JSON.stringify(r).toLowerCase().includes(s.q.toLowerCase()));downloadCsv(key+".csv",rows)}
-      function downloadCsv(name,rows){if(!rows.length)return notice("ไม่มีข้อมูลสำหรับส่งออก","warning");const keys=Object.keys(rows[0]).filter(k=>typeof rows[0][k]!=="object"),cell=v=>`"${String(v??"").replaceAll('"','""')}"`,csv="\uFEFF"+keys.map(cell).join(",")+"\n"+rows.map(r=>keys.map(k=>cell(r[k])).join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
-      function enhanceAdminTables(){
-        ["admin-equipment","admin-departments","admin-users","admin-logs"].forEach(id=>{const panel=$("#"+id),table=panel&&panel.querySelector("table");if(!table||panel.querySelector(".data-controls"))return;const rows=[...table.tBodies[0].rows],controls=document.createElement("div");controls.className="data-controls";controls.innerHTML='<input placeholder="ค้นหาข้อมูล..."><select><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select><option>10</option><option>20</option><option>50</option><option>100</option></select><button class="btn">ส่งออก CSV</button>';panel.insertBefore(controls,panel.querySelector(".table-wrap"));const [q,sort,size,btn]=controls.children;function apply(){const list=rows.filter(r=>r.innerText.toLowerCase().includes(q.value.toLowerCase()));list.sort((a,b)=>a.rowIndex-b.rowIndex);if(sort.value==="desc")list.reverse();rows.forEach(r=>r.style.display="none");list.slice(0,+size.value).forEach(r=>{r.style.display="";table.tBodies[0].appendChild(r)})}q.oninput=sort.onchange=size.onchange=apply;btn.onclick=()=>downloadCsv(id+".csv",rows.filter(r=>r.style.display!=="none").map(r=>Object.fromEntries([...r.cells].map((c,i)=>["คอลัมน์ "+(i+1),c.innerText]))));apply()})}
-      async function reloadAdminAndPublic(){await loadAdmin();await refreshInitialData();}
+      function downloadCsv(name,rows){if(!rows.length)return notice("ไม่มีข้อมูลสำหรับส่งออก","warning");const keys=Object.keys(rows[0]).filter(k=>typeof rows[0][k]!=="object"&&!k.startsWith("_")),cell=v=>`"${String(v??"").replaceAll('"','""')}"`,csv="\uFEFF"+keys.map(cell).join(",")+"\n"+rows.map(r=>keys.map(k=>cell(r[k])).join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
+      async function reloadAdminAndPublic(){ADMIN=null;adminLoadedAt=0;publicBookingsCache={rows:[],loadedAt:0};await Promise.all([loadAdmin(),refreshInitialData()]);}
       function esc(v) {
         return String(v ?? "").replace(
           /[&<>'"]/g,
