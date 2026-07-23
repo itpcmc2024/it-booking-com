@@ -270,6 +270,25 @@
       .mini-btn.off { background:var(--pink) }
       .form-check { display:flex;align-items:center;gap:8px }
       .form-check input { width:auto }
+      .swal-check-group {
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:10px;
+        margin-top:6px;
+      }
+      .swal-check-option {
+        display:flex;
+        align-items:center;
+        gap:9px;
+        min-height:44px;
+        padding:9px 12px;
+        border:1px solid #e1e3f4;
+        border-radius:13px;
+        background:#fafaff;
+        cursor:pointer;
+      }
+      .swal-check-option:hover { background:#f2f0ff }
+      .swal-check-option input { width:18px;height:18px;margin:0;accent-color:#8f88df }
       .swal2-popup { font-family:Prompt,sans-serif!important;border-radius:22px!important }
       .swal2-confirm,.swal2-cancel { border-radius:12px!important;font-family:Prompt,sans-serif!important }
       .toast {
@@ -820,10 +839,28 @@
       }
       async function equipmentForm(i){
         const e=i===undefined?{}:ADMIN.equipment[i];
+        const conditionOptions=selectOptions(["ปกติ","ตำหนิ"],e.condition||"ปกติ");
+        const statusOptions=selectOptions(["พร้อมใช้งาน","ไม่พร้อมใช้งาน"],e.availability_status||"พร้อมใช้งาน");
+        const locationOptions=selectOptions(["งานสารสนเทศ","งานโครงข่าย"],e.current_location||"");
+        const selectedAccessories=String(e.default_accessories||"").split(",").map(x=>x.trim()).filter(Boolean);
+        const accessoryOptions=["เมาส์","คีย์บอร์ด","สะพานไฟ","สาย HDMI"].map(x=>`<label class="swal-check-option"><input type="checkbox" class="swal-accessory" value="${esc(x)}" ${selectedAccessories.includes(x)?"checked":""}><span>${esc(x)}</span></label>`).join("");
+        const equipmentHtml=`<div class="grid" style="text-align:left">
+          ${formInput("ชื่ออุปกรณ์ *","equipment_name",e.equipment_name)}
+          ${formInput("รหัสทรัพย์สิน","asset_code",e.asset_code)}
+          ${formInput("ประเภท","category",e.category)}
+          ${formInput("ยี่ห้อ","brand",e.brand)}
+          ${formInput("รุ่น","model",e.model)}
+          ${formInput("Serial Number","serial_number",e.serial_number)}
+          <div><label>สภาพ</label><select class="swal-field" name="condition">${conditionOptions}</select></div>
+          <div><label>สถานะ</label><select class="swal-field" name="availability_status">${statusOptions}</select></div>
+          <div><label>สถานที่เก็บ</label><select class="swal-field" name="current_location"><option value="">เลือกสถานที่เก็บ</option>${locationOptions}</select></div>
+          <div><label>อุปกรณ์เสริม</label><div class="swal-check-group">${accessoryOptions}</div></div>
+          ${formInput("หมายเหตุ","note",e.note)}
+        </div>`;
         const r=await Swal.fire({title:e.equipment_id?"แก้ไขอุปกรณ์":"เพิ่มอุปกรณ์",width:760,html:
-          formGrid([["ชื่ออุปกรณ์ *","equipment_name",e.equipment_name],["รหัสทรัพย์สิน","asset_code",e.asset_code],["ประเภท","category",e.category],["ยี่ห้อ","brand",e.brand],["รุ่น","model",e.model],["Serial Number","serial_number",e.serial_number],["สภาพ","condition",e.condition||"ปกติ"],["สถานะ","availability_status",e.availability_status||"พร้อมใช้งาน"],["สถานที่เก็บ","current_location",e.current_location],["อุปกรณ์เสริม","default_accessories",e.default_accessories],["หมายเหตุ","note",e.note]]),
+          equipmentHtml,
           showCancelButton:true,confirmButtonText:"บันทึก",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",
-          preConfirm:()=>{const d=swalData();if(!d.equipment_name)return Swal.showValidationMessage("กรุณาระบุชื่ออุปกรณ์");return Object.assign(d,{equipment_id:e.equipment_id||"",active:e.equipment_id?truth(e.active):true});}});
+          preConfirm:()=>{const d=swalData();d.default_accessories=[...Swal.getHtmlContainer().querySelectorAll(".swal-accessory:checked")].map(x=>x.value).join(",");if(!d.equipment_name)return Swal.showValidationMessage("กรุณาระบุชื่ออุปกรณ์");return Object.assign(d,{equipment_id:e.equipment_id||"",active:e.equipment_id?truth(e.active):true});}});
         if(!r.isConfirmed)return;await server("saveEquipment",token,r.value);await notice("บันทึกข้อมูลอุปกรณ์แล้ว");await reloadAdminAndPublic();
       }
       function renderDepartmentAdmin(){
@@ -857,6 +894,8 @@
         $("#logAdmin").innerHTML=adminTable(["วันเวลา","ผู้ทำรายการ","การดำเนินการ","ข้อมูลอ้างอิง","รายละเอียด"],(ADMIN.logs||[]).map(l=>`<tr><td>${fmt(l.timestamp)}</td><td>${esc(l.user_name||"-")}</td><td>${esc(l.action||"-")}</td><td>${esc(l.reference_type||"")} ${esc(l.reference_id||"")}</td><td>${esc(l.detail||"-")}</td></tr>`));
       }
       function formGrid(fields){return `<div class="grid" style="text-align:left">${fields.map(x=>`<div><label>${x[0]}</label><input class="swal-field" name="${x[1]}" type="${x[3]||"text"}" value="${esc(x[2]||"")}"></div>`).join("")}</div>`}
+      function formInput(label,name,value,type="text"){return `<div><label>${label}</label><input class="swal-field" name="${name}" type="${type}" value="${esc(value||"")}"></div>`}
+      function selectOptions(options,current){return options.map(x=>`<option value="${esc(x)}" ${String(current)===x?"selected":""}>${esc(x)}</option>`).join("")}
       function swalData(){return Object.fromEntries([...Swal.getHtmlContainer().querySelectorAll(".swal-field")].map(x=>[x.name,x.value.trim()]))}
       async function toggleItem(type,id,active){
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
