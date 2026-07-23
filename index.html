@@ -268,9 +268,10 @@
       .detail-item.full { grid-column:1/-1; }
       .detail-label { display:block; color:#738096; font-size:12px; margin-bottom:3px; }
       .detail-value { font-weight:500; overflow-wrap:anywhere; }
-      .data-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:12px 0; }
-      .data-controls input { flex:1 1 220px; }
+      .data-controls { display:flex; flex-wrap:nowrap; align-items:center; gap:8px; margin:12px 0; }
+      .data-controls input { flex:1 1 180px; min-width:120px; }
       .data-controls select { width:auto; min-width:115px; }
+      .dashboard-range-note { grid-column:1/-1; color:#738096; font-size:12px; margin:-4px 2px 2px; }
       .s-wait {
         background: var(--yellow);
       }
@@ -399,6 +400,8 @@
         font-weight: 600;
       }
       @media (max-width: 700px) {
+        .data-controls { flex-wrap:wrap; }
+        .data-controls input { flex-basis:100%; }
         .grid {
           grid-template-columns: 1fr;
         }
@@ -465,13 +468,13 @@
         </div>
       </section>
       <section id="booking" class="page">
-        <div class="dashboard-strip public-dashboard"></div>
+        <div class="dashboard-strip public-dashboard" id="bookingDashboard"></div>
         <div class="card booking-step" id="equipmentPicker">
           <h2 class="title step-title">เลือกอุปกรณ์ที่ต้องการยืม</h2>
           <p class="step-help">เลือกประเภทและช่วงวันเวลา ระบบจะแสดงเฉพาะอุปกรณ์ที่ว่าง</p>
           <div class="grid">
             <div><label class="req">ประเภทอุปกรณ์</label>
-              <select id="bookingCategory"><option value="">เลือกประเภทอุปกรณ์</option><option>Notebook</option><option>PC</option><option>Projector</option><option>TV</option></select>
+              <select id="bookingCategory"><option value="">กำลังโหลดประเภทอุปกรณ์...</option></select>
             </div>
             <div></div>
             <div><label class="req">วันเวลารับ</label><input id="pickerBorrow" type="datetime-local"></div>
@@ -529,12 +532,6 @@
         <div class="dashboard-strip public-dashboard"></div>
         <div class="card">
           <h2 class="title">ตรวจสอบสถานะคำขอ</h2>
-          <div class="toolbar">
-            <input
-              id="searchQ"
-              placeholder="เลขที่คำขอ ชื่อ เบอร์โทร หรือแผนก"
-            /><button class="btn primary" onclick="search()">ค้นหา</button>
-          </div>
           <div id="results"></div>
         </div>
       </section>
@@ -623,6 +620,7 @@
           "getInitialData",
           "getCalendarEvents",
           "getAvailableEquipment",
+          "getAvailabilitySummary",
           "searchBookings",
         ].includes(action);
         if (!readOnly || packed.length > 7000) {
@@ -692,6 +690,7 @@
             $$(".page").forEach((x) => x.classList.remove("active"));
             $("#" + b.dataset.page).classList.add("active");
             if (b.dataset.page === "calendar") loadCalendar();
+            if (b.dataset.page === "status") search();
             if (b.dataset.page === "admin" && token) loadAdmin();
           }),
       );
@@ -705,6 +704,7 @@
         DATA = await server("getInitialData");
         $("#brand").textContent = DATA.systemName;
         renderPublicDashboard();
+        renderEquipmentCategories();
         setupMonthPickers();
         $("#department").innerHTML =
           '<option value="">เลือกหน่วยงาน</option>' +
@@ -828,17 +828,26 @@
         await loadCalendar();
       };
       let availableEquipment=[];
+      let availabilityRequest=0;
       ["bookingCategory","pickerBorrow","pickerReturn"].forEach(id=>$("#"+id).addEventListener("change",refreshEquipmentGallery));
       async function refreshEquipmentGallery(){
         const category=$("#bookingCategory").value,a=$("#pickerBorrow").value,b=$("#pickerReturn").value;
         $("#equipmentGallery").innerHTML="";
         if(!category||!a||!b){
           $("#availableEquipmentMessage").textContent="กรุณาเลือกประเภทอุปกรณ์และวันเวลาที่ต้องการยืม";
+          renderBookingDashboard();
           return;
         }
-        if(new Date(a)<new Date()){ $("#availableEquipmentMessage").textContent="ไม่สามารถเลือกวันเวลาย้อนหลังได้"; return; }
-        if(new Date(b)<=new Date(a)){ $("#availableEquipmentMessage").textContent="วันเวลาคืนต้องมากกว่าวันเวลารับ"; return; }
-        availableEquipment=(await server("getAvailableEquipment",a,b,category))||[];
+        if(new Date(a)<new Date()){ $("#availableEquipmentMessage").textContent="ไม่สามารถเลือกวันเวลาย้อนหลังได้";renderBookingDashboard();return; }
+        if(new Date(b)<=new Date(a)){ $("#availableEquipmentMessage").textContent="วันเวลาคืนต้องมากกว่าวันเวลารับ";renderBookingDashboard();return; }
+        const request=++availabilityRequest;
+        const result=await Promise.all([
+          server("getAvailableEquipment",a,b,category),
+          server("getAvailabilitySummary",a,b,category)
+        ]);
+        if(request!==availabilityRequest)return;
+        availableEquipment=result[0]||[];
+        renderBookingDashboard(result[1]);
         $("#availableEquipmentMessage").textContent=availableEquipment.length?`พบอุปกรณ์ว่าง ${availableEquipment.length} รายการ — คลิกรูปเพื่อยื่นคำขอ`:"ไม่มีอุปกรณ์ว่างในประเภทและช่วงเวลานี้";
         $("#equipmentGallery").innerHTML=availableEquipment.map((e,i)=>`<button type="button" class="equipment-card" onclick="chooseEquipment(${i})">
           ${equipmentImage(e)}
@@ -873,7 +882,7 @@
         });
       }
       async function search() {
-        let rows = await server("searchBookings", $("#searchQ").value);
+        let rows = await server("searchBookings", "");
         renderRows(rows, "#results", false);
       }
       function renderRows(rows, target, admin) {
@@ -1041,11 +1050,27 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function refreshInitialData(){DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;renderPublicDashboard();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function refreshInitialData(){DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      function renderEquipmentCategories(){
+        const select=$("#bookingCategory"),current=select.value;
+        const categories=(DATA.categories||[]).filter(Boolean);
+        select.innerHTML='<option value="">เลือกประเภทอุปกรณ์</option>'+categories.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+        if(categories.includes(current))select.value=current;
+      }
       function renderPublicDashboard(){
         const s=DATA.summary||{};
         const cards=[["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]];
-        $$(".public-dashboard").forEach(el=>el.innerHTML=cards.map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join(""));
+        $$(".public-dashboard").filter(el=>el.id!=="bookingDashboard").forEach(el=>el.innerHTML=cards.map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join(""));
+        renderBookingDashboard();
+      }
+      function renderBookingDashboard(summary){
+        const el=$("#bookingDashboard");if(!el)return;
+        const s=summary||DATA.summary||{},ranged=!!summary;
+        const cards=ranged
+          ? [["💻","อุปกรณ์ในประเภท",s.totalEquipment||0],["✅","ว่างช่วงนี้",s.available||0],["⏳","รออนุมัติช่วงนี้",s.waiting||0],["📦","ถูกจอง/ใช้งาน",s.inUse||0],["⚠️","คืนล่าช้า",s.late||0]]
+          : [["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]];
+        el.innerHTML=cards.map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join("")+
+          (ranged?'<div class="dashboard-range-note">สรุปตามประเภทและช่วงวันเวลาที่เลือก</div>':"");
       }
       const tableStates={};
       function renderDataTable(target,rows,key,renderer){
