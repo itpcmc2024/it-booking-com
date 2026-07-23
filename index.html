@@ -272,6 +272,8 @@
       .data-controls input { flex:1 1 180px; min-width:120px; }
       .data-controls select { width:auto; min-width:115px; }
       .dashboard-range-note { grid-column:1/-1; color:#738096; font-size:12px; margin:-4px 2px 2px; }
+      .step-help, .attention-text, #availableEquipmentMessage, .dashboard-range-note { color:#d9364f; font-weight:600; }
+      .swal2-html-container.alert-message { color:#d9364f !important; font-weight:600; }
       .user-menu { position:relative; }
       .user-menu-toggle {
         border:0;
@@ -492,7 +494,6 @@
     </nav>
     <main class="wrap">
       <section id="calendar" class="page active">
-        <div class="dashboard-strip public-dashboard"></div>
         <div class="card">
           <div class="calendar-head">
             <button class="btn" onclick="moveMonth(-1)">‹ ก่อนหน้า</button>
@@ -567,7 +568,6 @@
         </form>
       </section>
       <section id="status" class="page">
-        <div class="dashboard-strip public-dashboard"></div>
         <div class="card">
           <h2 class="title">ตรวจสอบสถานะคำขอ</h2>
           <div id="results"></div>
@@ -583,7 +583,7 @@
           <div class="actions">
             <button class="btn primary" onclick="login()">เข้าสู่ระบบ</button>
           </div>
-          <div class="sub">ครั้งแรกใช้ admin / admin123 และควรเปลี่ยนทันที</div>
+          <div class="sub attention-text">ครั้งแรกใช้ admin / admin123 และควรเปลี่ยนทันที</div>
         </div>
         <div id="adminBox" style="display: none">
           <div class="card">
@@ -709,7 +709,8 @@
       function notice(text, icon = "success", title = "") {
         return Swal.fire({
           icon, title: title || (icon === "error" ? "ไม่สำเร็จ" : "เรียบร้อย"),
-          text, confirmButtonText: "ตกลง", confirmButtonColor: "#8f88df"
+          text, confirmButtonText: "ตกลง", confirmButtonColor: "#8f88df",
+          customClass: { htmlContainer: ["warning","error"].includes(icon) ? "alert-message" : "" }
         });
       }
       $$(".nav button").forEach(
@@ -863,13 +864,14 @@
         let p = Object.fromEntries(f.entries());
         p.equipmentIds = ids;
         let r = await server("createBooking", p);
+        updateDashboardAfterBooking();
         await notice("เลขที่คำขอ " + r.id, "success", "ส่งคำขอสำเร็จ");
         e.target.reset();
         backToEquipmentPicker(true);
         setBorrowDateMinimums();
-        await refreshInitialData();
         month = new Date(p.borrowDateTime);
-        await loadCalendar();
+        // งานโหลดข้อมูลเต็มทำเบื้องหลัง ผู้ใช้ไม่ต้องรอหลังเห็นผลบันทึกสำเร็จ
+        Promise.allSettled([refreshInitialData(),loadCalendar()]);
       };
       let availableEquipment=[];
       let availabilityRequest=0;
@@ -1111,6 +1113,12 @@
         const cards=[["💻","อุปกรณ์ทั้งหมด",s.totalEquipment||0],["✅","พร้อมใช้งาน",s.available||0],["⏳","รออนุมัติ",s.waiting||0],["📦","กำลังยืม",s.borrowing||0],["⚠️","คืนล่าช้า",s.late||0]];
         $$(".public-dashboard").filter(el=>el.id!=="bookingDashboard").forEach(el=>el.innerHTML=cards.map(x=>`<div class="stat"><span>${x[0]} ${x[1]}</span><b>${x[2]}</b></div>`).join(""));
         renderBookingDashboard();
+      }
+      function updateDashboardAfterBooking(){
+        DATA.summary=Object.assign({},DATA.summary||{},{
+          waiting:(Number(DATA.summary&&DATA.summary.waiting)||0)+1
+        });
+        renderPublicDashboard();
       }
       function renderBookingDashboard(summary){
         const el=$("#bookingDashboard");if(!el)return;
