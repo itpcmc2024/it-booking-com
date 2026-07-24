@@ -482,7 +482,7 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V15</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V16</div>
       </div>
       <div id="who"></div>
     </header>
@@ -1185,7 +1185,7 @@
         s.renderer=renderer;
         const container=$(target);
         if(!container.querySelector(".data-controls")){
-          container.innerHTML=`<div class="data-controls" data-table-key="${esc(key)}" data-table-target="${esc(target)}"><input data-control="query" data-table-key="${esc(key)}" data-table-target="${esc(target)}" type="search" autocomplete="off" placeholder="ค้นหาข้อมูล..." oninput="dataTableQueryInput(this)" onsearch="dataTableQueryInput(this)" oncompositionend="dataTableQueryInput(this)"><select data-control="sort"><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select data-control="size">${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn" data-control="export">ส่งออก CSV</button><span class="sub" data-control="summary"></span><button class="btn" data-control="prev">‹</button><button class="btn" data-control="next">›</button></div><div class="data-table-body"></div>`;
+          container.innerHTML=`<div class="data-controls" data-table-key="${esc(key)}" data-table-target="${esc(target)}"><input data-control="query" data-table-key="${esc(key)}" data-table-target="${esc(target)}" type="search" autocomplete="off" placeholder="ค้นหาข้อมูล..."><select data-control="sort"><option value="desc">ใหม่ → เก่า</option><option value="asc">เก่า → ใหม่</option></select><select data-control="size">${[10,20,50,100].map(n=>`<option>${n}</option>`).join("")}</select><button class="btn" data-control="export">ส่งออก CSV</button><span class="sub" data-control="summary"></span><button class="btn" data-control="prev">‹</button><button class="btn" data-control="next">›</button></div><div class="data-table-body"></div>`;
           const q=container.querySelector('[data-control="query"]');
           const sort=container.querySelector('[data-control="sort"]');
           const size=container.querySelector('[data-control="size"]');
@@ -1209,6 +1209,27 @@
         tableStates[key].page=1;
         refreshDataTable(target,key);
       }
+      function handleDataTableSearchEvent(event){
+        const input=event.target && event.target.closest
+          ? event.target.closest('.data-controls input[data-control="query"]')
+          : null;
+        if(!input)return;
+        if(event.type==="compositionstart"){
+          input.dataset.composing="1";
+          return;
+        }
+        if(event.type==="compositionend"){
+          delete input.dataset.composing;
+          dataTableQueryInput(input);
+          return;
+        }
+        if(input.dataset.composing==="1")return;
+        dataTableQueryInput(input);
+      }
+      document.addEventListener("input",handleDataTableSearchEvent,true);
+      document.addEventListener("search",handleDataTableSearchEvent,true);
+      document.addEventListener("compositionstart",handleDataTableSearchEvent,true);
+      document.addEventListener("compositionend",handleDataTableSearchEvent,true);
       function refreshDataTable(target,key){
         const s=tableStates[key];
         const container=$(target);
