@@ -482,7 +482,7 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">© 2026 IT Booking System. 🌿 · V16</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V17</div>
       </div>
       <div id="who"></div>
     </header>
@@ -628,6 +628,7 @@
         user = JSON.parse(localStorage.getItem("eqUser") || "null");
       const $ = (s) => document.querySelector(s),
         $$ = (s) => [...document.querySelectorAll(s)];
+      let pendingRequests = 0;
       function server(fn, ...args) {
         showSpin(1);
         return apiCall(fn, args)
@@ -656,14 +657,7 @@
           "searchBookings",
         ].includes(action);
         if (!readOnly || packed.length > 7000) {
-          return fetch(url, {
-            method: "POST",
-            redirect: "follow",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action, args }),
-          })
-            .then((r) => r.json())
-            .then(unwrap);
+          return postApi(url, action, args, action === "login" ? 1 : 0);
         }
         return new Promise((resolve, reject) => {
           const cb =
@@ -700,13 +694,50 @@
           document.head.appendChild(script);
         });
       }
+      async function postApi(url, action, args, retries) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 25000);
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            redirect: "follow",
+            cache: "no-store",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action, args }),
+            signal: controller.signal,
+          });
+          const text = await response.text();
+          const type = String(response.headers.get("content-type") || "").toLowerCase();
+          if (!response.ok || /^\s*</.test(text) || (!type.includes("json") && !/^\s*\{/.test(text))) {
+            throw new Error("API_HTML_RESPONSE");
+          }
+          let payload;
+          try { payload = JSON.parse(text); }
+          catch (e) { throw new Error("API_INVALID_JSON"); }
+          return unwrap(payload);
+        } catch (error) {
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 700));
+            return postApi(url, action, args, retries - 1);
+          }
+          if (error && error.name === "AbortError")
+            throw new Error("ระบบตอบกลับช้าเกินไป กรุณาลองอีกครั้ง");
+          if (["API_HTML_RESPONSE","API_INVALID_JSON"].includes(error && error.message))
+            throw new Error("เชื่อมต่อฐานข้อมูลไม่สำเร็จ กรุณาลองใหม่ หากยังพบปัญหาให้ผู้ดูแลตรวจสอบ URL และสิทธิ์ของ Apps Script");
+          if (error && error.message && !(error instanceof TypeError)) throw error;
+          throw new Error("เชื่อมต่อระบบไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่");
+        } finally {
+          clearTimeout(timer);
+        }
+      }
       function unwrap(payload) {
         if (!payload || payload.ok !== true)
           throw new Error((payload && payload.error) || "API ตอบกลับไม่ถูกต้อง");
         return payload.data;
       }
       function showSpin(v) {
-        $("#spin").style.display = v ? "grid" : "none";
+        pendingRequests = Math.max(0, pendingRequests + (v ? 1 : -1));
+        $("#spin").style.display = pendingRequests ? "grid" : "none";
       }
       function notice(text, icon = "success", title = "") {
         return Swal.fire({
@@ -959,6 +990,9 @@
           : '<div class="empty">ไม่พบข้อมูล</div>');
       }
       async function login() {
+        const button = document.querySelector("#loginBox button");
+        if (button) button.disabled = true;
+        try {
         let r = await server(
           "login",
           $("#username").value,
@@ -969,10 +1003,13 @@
         localStorage.setItem("eqToken", token);
         localStorage.setItem("eqUser", JSON.stringify(user));
         refreshUser();
-        loadAdmin();
+        loadAdmin().catch(()=>{});
         if (r.mustChange) {
           await notice("เพื่อความปลอดภัย กรุณาเปลี่ยนรหัสผ่านเริ่มต้นทันที", "warning");
           openPassword();
+        }
+        } finally {
+          if (button) button.disabled = false;
         }
       }
       function refreshUser() {
@@ -1278,7 +1315,9 @@
               timeStyle: "short",
             });
       }
-      init();
+      init().catch(() => {
+        $("#brand").textContent = "ระบบยืมคอมพิวเตอร์และอุปกรณ์";
+      });
     </script>
   </body>
 </html>
