@@ -3,8 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="application-version" content="V18" />
-    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V18</title>
+    <meta name="application-version" content="V19" />
+    <link rel="icon" href="data:," />
+    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V19</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
@@ -489,7 +490,7 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V18</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V19</div>
       </div>
       <div id="who"></div>
     </header>
@@ -623,8 +624,8 @@
         </div>
       </div>
     </div>
-    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V18</div>
-    <script src="config.js?v=18"></script>
+    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V19</div>
+    <script src="config.js?v=19"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
         month = new Date(),
@@ -662,6 +663,7 @@
           "getCalendarEvents",
           "getAvailableEquipment",
           "getAvailabilitySummary",
+          "getBookingAvailability",
           "searchBookings",
           "login",
         ].includes(action);
@@ -681,7 +683,7 @@
             } else {
               finish(new Error("ระบบตอบกลับช้าเกินไป กรุณาลองอีกครั้ง"));
             }
-          }, 15000);
+          }, 30000);
           function finish(err, value) {
             clearTimeout(timer);
             delete window[cb];
@@ -787,19 +789,19 @@
       };
       async function init() {
         let cachedInitial = null;
-        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV18") || "null"); } catch (_) {}
+        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV19") || "null"); } catch (_) {}
         if (cachedInitial && cachedInitial.data) {
           DATA = cachedInitial.data;
           applyInitialData();
           apiCall("getInitialData", []).then(data => {
             DATA = data;
-            localStorage.setItem("eqInitialDataV18", JSON.stringify({data, savedAt:Date.now()}));
+            localStorage.setItem("eqInitialDataV19", JSON.stringify({data, savedAt:Date.now()}));
             applyInitialData();
           }).catch(()=>{});
           return;
         }
         DATA = await server("getInitialData");
-        localStorage.setItem("eqInitialDataV18", JSON.stringify({data:DATA, savedAt:Date.now()}));
+        localStorage.setItem("eqInitialDataV19", JSON.stringify({data:DATA, savedAt:Date.now()}));
         applyInitialData();
       }
       function applyInitialData() {
@@ -973,13 +975,10 @@
         if(new Date(a)<new Date()){ $("#availableEquipmentMessage").textContent="ไม่สามารถเลือกวันเวลาย้อนหลังได้";renderBookingDashboard();return; }
         if(!validatePickerDates(false)){ $("#availableEquipmentMessage").textContent="วันเวลาคืนต้องมากกว่าวันเวลารับ";renderBookingDashboard();return; }
         const request=++availabilityRequest;
-        const result=await Promise.all([
-          server("getAvailableEquipment",a,b,category),
-          server("getAvailabilitySummary",a,b,category)
-        ]);
+        const result=await server("getBookingAvailability",a,b,category);
         if(request!==availabilityRequest)return;
-        availableEquipment=result[0]||[];
-        renderBookingDashboard(result[1]);
+        availableEquipment=result.equipment||[];
+        renderBookingDashboard(result.summary);
         $("#availableEquipmentMessage").textContent=availableEquipment.length?`พบอุปกรณ์ว่าง ${availableEquipment.length} รายการ — คลิกรูปเพื่อยื่นคำขอ`:"ไม่มีอุปกรณ์ว่างในประเภทและช่วงเวลานี้";
         $("#equipmentGallery").innerHTML=availableEquipment.map((e,i)=>`<button type="button" class="equipment-card" onclick="chooseEquipment(${i})">
           ${equipmentImage(e)}
@@ -1035,8 +1034,8 @@
           $("#username").value,
           $("#password").value,
         );
-        if (r.version !== "V18") {
-          throw new Error("หน้าเว็บเป็น V18 แต่ API ยังไม่ใช่ V18 กรุณา Deploy Code.gs เวอร์ชันใหม่");
+        if (r.version !== "V19") {
+          throw new Error("หน้าเว็บเป็น V19 แต่ API ยังไม่ใช่ V19 กรุณา Deploy Code.gs เวอร์ชันใหม่");
         }
         token = r.token;
         user = r;
@@ -1202,7 +1201,7 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV18",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV19",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function renderEquipmentCategories(){
         const select=$("#bookingCategory"),current=select.value;
         const categories=(DATA.categories||[]).filter(Boolean);
