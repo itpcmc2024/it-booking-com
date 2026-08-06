@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="application-version" content="V18" />
+    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V18</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
@@ -30,6 +32,11 @@
         background: linear-gradient(135deg, #f9f7ff, #f2fbf8);
         color: var(--ink);
         font-family: Prompt, sans-serif;
+      }
+      .version-stamp {
+        position: fixed; right: 10px; bottom: 10px; z-index: 99999;
+        padding: 5px 10px; border-radius: 999px; background: #6f68c9;
+        color: #fff; font-size: 12px; font-weight: 600; box-shadow: var(--shadow);
       }
       .top {
         padding: 22px max(18px, 5vw);
@@ -482,7 +489,7 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V17</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V18</div>
       </div>
       <div id="who"></div>
     </header>
@@ -616,7 +623,8 @@
         </div>
       </div>
     </div>
-    <script src="config.js"></script>
+    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V18</div>
+    <script src="config.js?v=18"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
         month = new Date(),
@@ -649,24 +657,31 @@
             new Error("กรุณาตั้งค่า API_URL ในไฟล์ config.js ก่อนใช้งาน"),
           );
         const packed = JSON.stringify(args);
-        const readOnly = [
+        const jsonpActions = [
           "getInitialData",
           "getCalendarEvents",
           "getAvailableEquipment",
           "getAvailabilitySummary",
           "searchBookings",
+          "login",
         ].includes(action);
-        if (!readOnly || packed.length > 7000) {
-          return postApi(url, action, args, action === "login" ? 1 : 0);
+        if (!jsonpActions || packed.length > 7000) {
+          return postApi(url, action, args, 0);
         }
+        return jsonpApi(url, action, packed, action === "login" ? 1 : 0);
+      }
+      function jsonpApi(url, action, packed, retries) {
         return new Promise((resolve, reject) => {
           const cb =
             "gasCb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
           const script = document.createElement("script");
-          const timer = setTimeout(
-            () => finish(new Error("เชื่อมต่อ API ไม่สำเร็จ")),
-            30000,
-          );
+          const timer = setTimeout(() => {
+            if (retries > 0) {
+              finish(null, jsonpApi(url, action, packed, retries - 1));
+            } else {
+              finish(new Error("ระบบตอบกลับช้าเกินไป กรุณาลองอีกครั้ง"));
+            }
+          }, 15000);
           function finish(err, value) {
             clearTimeout(timer);
             delete window[cb];
@@ -680,7 +695,13 @@
               finish(e);
             }
           };
-          script.onerror = () => finish(new Error("โหลด API ไม่สำเร็จ"));
+          script.onerror = () => {
+            if (retries > 0) {
+              finish(null, jsonpApi(url, action, packed, retries - 1));
+            } else {
+              finish(new Error("เชื่อมต่อฐานข้อมูลไม่สำเร็จ กรุณาลองใหม่"));
+            }
+          };
           script.src =
             url +
             "?action=" +
@@ -692,7 +713,7 @@
             "&_=" +
             Date.now();
           document.head.appendChild(script);
-        });
+        }).then(value => value);
       }
       async function postApi(url, action, args, retries) {
         const controller = new AbortController();
@@ -765,7 +786,23 @@
         $("#admin-"+b.dataset.admin).classList.add("active");
       };
       async function init() {
+        let cachedInitial = null;
+        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV18") || "null"); } catch (_) {}
+        if (cachedInitial && cachedInitial.data) {
+          DATA = cachedInitial.data;
+          applyInitialData();
+          apiCall("getInitialData", []).then(data => {
+            DATA = data;
+            localStorage.setItem("eqInitialDataV18", JSON.stringify({data, savedAt:Date.now()}));
+            applyInitialData();
+          }).catch(()=>{});
+          return;
+        }
         DATA = await server("getInitialData");
+        localStorage.setItem("eqInitialDataV18", JSON.stringify({data:DATA, savedAt:Date.now()}));
+        applyInitialData();
+      }
+      function applyInitialData() {
         $("#brand").textContent = DATA.systemName;
         renderPublicDashboard();
         renderEquipmentCategories();
@@ -998,12 +1035,15 @@
           $("#username").value,
           $("#password").value,
         );
+        if (r.version !== "V18") {
+          throw new Error("หน้าเว็บเป็น V18 แต่ API ยังไม่ใช่ V18 กรุณา Deploy Code.gs เวอร์ชันใหม่");
+        }
         token = r.token;
         user = r;
         localStorage.setItem("eqToken", token);
         localStorage.setItem("eqUser", JSON.stringify(user));
         refreshUser();
-        loadAdmin().catch(()=>{});
+          loadAdmin(true).catch(()=>{});
         if (r.mustChange) {
           await notice("เพื่อความปลอดภัย กรุณาเปลี่ยนรหัสผ่านเริ่มต้นทันที", "warning");
           openPassword();
@@ -1033,9 +1073,9 @@
           refreshUser();
         }
       }
-      async function loadAdmin() {
+      async function loadAdmin(silent=false) {
         try {
-          ADMIN = await server("getAdminData", token);
+          ADMIN = silent ? await apiCall("getAdminData", [token]) : await server("getAdminData", token);
           adminLoadedAt=Date.now();
           $("#adminRole").textContent="เข้าสู่ระบบโดย "+(user?.name||"")+" · สิทธิ์ "+ADMIN.role;
           $$(".admin-only").forEach(x=>x.style.display=ADMIN.role==="ADMIN"?"":"none");
@@ -1162,7 +1202,7 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function refreshInitialData(){DATA=await server("getInitialData");$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV18",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function renderEquipmentCategories(){
         const select=$("#bookingCategory"),current=select.value;
         const categories=(DATA.categories||[]).filter(Boolean);
