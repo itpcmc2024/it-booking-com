@@ -922,7 +922,7 @@
         const name=e.equipment||e.title||"-",status=String(e.status||"");
         if(status==="รออนุมัติ")return `${name} : รออนุมัติ`;
         if(status==="อนุมัติแล้ว")return `${name} : อนุมัติ`;
-        if(status==="รับอุปกรณ์แล้ว")return `${name} : อยู่ระหว่างยืม`;
+        if(status==="รับอุปกรณ์แล้ว")return `${name} : ระหว่างยืม`;
         if(["คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(status))return `${name} : คืนแล้ว`;
         return `${name} : ${status||"-"}`;
       }
