@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="application-version" content="V20" />
     <link rel="icon" href="data:," />
-    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V20</title>
+    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V.20</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
@@ -501,8 +501,8 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V20</div>
-        <div class="sub">© 2026 IT Booking Com System.</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿</div>
+        <div class="sub">© 2026 IT Booking Com System. V.20</div>
       </div>
       <div id="who"></div>
     </header>
@@ -636,7 +636,7 @@
         </div>
       </div>
     </div>
-    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V20</div>
+    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V.20</div>
     <script src="config.js?v=20"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
@@ -1124,9 +1124,13 @@
         if(!ask.isConfirmed)return;
         let note=ask.value||"";
         await server("changeStatus", token, id, s, note);
+        if(s==="ยกเลิก") clearLocalCalendarCache();
         await notice("อัปเดตสถานะของ "+id+" แล้ว");
         await reloadAdminAndPublic();
         await loadCalendar();
+      }
+      function clearLocalCalendarCache(){
+        for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith("eqCalendarV20:"))localStorage.removeItem(key);}
       }
       async function openPassword() {
         const r=await Swal.fire({
