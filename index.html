@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="application-version" content="V19" />
+    <meta name="application-version" content="V20" />
     <link rel="icon" href="data:," />
-    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V19</title>
+    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V20</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
@@ -224,8 +224,11 @@
       }
       .calendar {
         display: grid;
-        grid-template-columns: repeat(7, 1fr);
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: 6px;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
       }
       .dow {
         text-align: center;
@@ -234,6 +237,7 @@
         padding: 8px;
       }
       .day {
+        min-width: 0;
         min-height: 110px;
         border: 1px solid #eeecf6;
         border-radius: 12px;
@@ -249,6 +253,9 @@
       }
       .day.weekend .daynum { color:#d9364f; }
       .event {
+        display: block;
+        width: 100%;
+        max-width: 100%;
         font-size: 10px;
         margin-top: 4px;
         border-radius: 7px;
@@ -261,6 +268,10 @@
         border-left: 5px solid var(--event-color, #9aa7b8);
         background: color-mix(in srgb, var(--event-color, #d7eaff) 30%, white);
       }
+      .more-events { display:block; width:100%; border:0; padding:4px 3px 2px; background:transparent; color:#5c6380; font:inherit; font-size:11px; text-align:left; cursor:pointer; }
+      .more-events:hover { color:#5148b8; text-decoration:underline; }
+      .day-event-list { display:grid; gap:8px; margin-top:10px; text-align:left; }
+      .day-event-choice { width:100%; border:1px solid #e6e5f1; border-left:6px solid var(--event-color,#9aa7b8); border-radius:11px; padding:9px 10px; background:#fff; color:#334155; font-family:inherit; text-align:left; cursor:pointer; }
       .weekend { color: #e45469; }
       .month-pickers { display:flex; gap:8px; align-items:center; }
       .month-pickers select { width:auto; min-width:120px; font-weight:600; }
@@ -490,7 +501,8 @@
     <header class="top">
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
-        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V19</div>
+        <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿 · V20</div>
+        <div class="sub">© 2026 IT Booking Com System.</div>
       </div>
       <div id="who"></div>
     </header>
@@ -624,8 +636,8 @@
         </div>
       </div>
     </div>
-    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V19</div>
-    <script src="config.js?v=19"></script>
+    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V20</div>
+    <script src="config.js?v=20"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
         month = new Date(),
@@ -670,7 +682,7 @@
         if (!jsonpActions || packed.length > 7000) {
           return postApi(url, action, args, 0);
         }
-        return jsonpApi(url, action, packed, action === "login" ? 1 : 0);
+        return jsonpApi(url, action, packed, 2);
       }
       function jsonpApi(url, action, packed, retries) {
         return new Promise((resolve, reject) => {
@@ -683,7 +695,7 @@
             } else {
               finish(new Error("ระบบตอบกลับช้าเกินไป กรุณาลองอีกครั้ง"));
             }
-          }, 30000);
+          }, 45000);
           function finish(err, value) {
             clearTimeout(timer);
             delete window[cb];
@@ -789,19 +801,19 @@
       };
       async function init() {
         let cachedInitial = null;
-        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV19") || "null"); } catch (_) {}
+        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV20") || localStorage.getItem("eqInitialDataV19") || "null"); } catch (_) {}
         if (cachedInitial && cachedInitial.data) {
           DATA = cachedInitial.data;
           applyInitialData();
           apiCall("getInitialData", []).then(data => {
             DATA = data;
-            localStorage.setItem("eqInitialDataV19", JSON.stringify({data, savedAt:Date.now()}));
+            localStorage.setItem("eqInitialDataV20", JSON.stringify({data, savedAt:Date.now()}));
             applyInitialData();
           }).catch(()=>{});
           return;
         }
         DATA = await server("getInitialData");
-        localStorage.setItem("eqInitialDataV19", JSON.stringify({data:DATA, savedAt:Date.now()}));
+        localStorage.setItem("eqInitialDataV20", JSON.stringify({data:DATA, savedAt:Date.now()}));
         applyInitialData();
       }
       function applyInitialData() {
@@ -838,12 +850,17 @@
       async function loadCalendar() {
         let a = new Date(month.getFullYear(), month.getMonth(), 1),
           b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
-        events = await server(
-          "getCalendarEvents",
-          a.toISOString(),
-          b.toISOString(),
-        );
-        renderCalendar();
+        const cacheKey=`eqCalendarV20:${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,"0")}`;
+        let hasCache=false;
+        try { const cached=JSON.parse(localStorage.getItem(cacheKey)||"null"); if(cached&&Array.isArray(cached.events)){events=cached.events;hasCache=true;renderCalendar();} } catch(_) {}
+        showSpin(1);
+        try {
+          events=await apiCall("getCalendarEvents",[a.toISOString(),b.toISOString()]);
+          localStorage.setItem(cacheKey,JSON.stringify({events,savedAt:Date.now()}));
+          renderCalendar();
+        } catch(e) {
+          if(!hasCache) notice(e.message||String(e),"error");
+        } finally { showSpin(0); }
       }
       function setupMonthPickers() {
         const months=Array.from({length:12},(_,i)=>new Date(2020,i,1).toLocaleDateString("th-TH",{month:"long"}));
@@ -881,9 +898,9 @@
             .slice(0, 4)
             .map(
               (e) =>
-                `<div class="event" style="--event-color:${esc(e.color||"#9ecff5")}" onclick='showEvent(${JSON.stringify(JSON.stringify(e))})'>${esc(calendarEventTitle(e,d))}</div>`,
+                `<div class="event" style="--event-color:${esc(e.color||"#9ecff5")}" onclick="showEvent(decodeURIComponent('${encodeURIComponent(JSON.stringify(e))}'))">${esc(calendarEventTitle(e,d))}</div>`,
             )
-            .join("")}${ev.length>4?`<div class="sub">อีก ${ev.length-4} รายการ</div>`:""}</div>`;
+            .join("")}${ev.length>4?`<button class="more-events" type="button" onclick="showDayEvents(decodeURIComponent('${encodeURIComponent(JSON.stringify(ev))}'))">อีก ${ev.length-4} รายการ ▾</button>`:""}</div>`;
         }
         $("#cal").innerHTML = html;
       }
@@ -896,11 +913,19 @@
       }
       function calendarEventTitle(e,day){
         const a=new Date(e.start),b=new Date(e.end),name=e.equipment||e.title||"-";
+        if(e.status==="คืนแล้ว")return `${name} : คืนแล้ว`;
+        if(e.status==="อุปกรณ์ชำรุด")return `${name} : คืนแล้ว (ชำรุด)`;
         if(sameLocalDay(a,b))return `${name} : ${localTime(a)}–${localTime(b)}`;
         if(sameLocalDay(day,a))return `${name} : รับ ${localTime(a)}`;
         if(sameLocalDay(day,b))return `${name} : คืน ${localTime(b)}`;
         return `${name} : อยู่ระหว่างยืม`;
       }
+      function showDayEvents(raw){
+        const list=JSON.parse(raw);
+        const html=`<div class="day-event-list">${list.map((e,i)=>`<button type="button" class="day-event-choice" style="--event-color:${esc(e.color||"#9ecff5")}" onclick="openDayEvent(decodeURIComponent('${encodeURIComponent(JSON.stringify(e))}'))">${esc(calendarEventTitle(e,new Date(e.start)))}<br><small>${esc(e.borrower||"")} · ${esc(e.id||"")}</small></button>`).join("")}</div>`;
+        Swal.fire({title:`รายการทั้งหมด ${list.length} รายการ`,html,width:620,showConfirmButton:false,showCloseButton:true});
+      }
+      function openDayEvent(raw){ Swal.close(); showEvent(raw); }
       function moveMonth(n) {
         month = new Date(month.getFullYear(), month.getMonth() + n, 1);
         syncMonthPickers();
@@ -1034,8 +1059,8 @@
           $("#username").value,
           $("#password").value,
         );
-        if (r.version !== "V19") {
-          throw new Error("หน้าเว็บเป็น V19 แต่ API ยังไม่ใช่ V19 กรุณา Deploy Code.gs เวอร์ชันใหม่");
+        if (r.version !== "V20") {
+          throw new Error("หน้าเว็บเป็น V20 แต่ API ยังไม่ใช่ V20 กรุณา Deploy Code.gs เวอร์ชันใหม่");
         }
         token = r.token;
         user = r;
@@ -1201,7 +1226,7 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV19",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV20",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function renderEquipmentCategories(){
         const select=$("#bookingCategory"),current=select.value;
         const categories=(DATA.categories||[]).filter(Boolean);
