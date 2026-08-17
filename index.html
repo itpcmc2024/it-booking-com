@@ -268,8 +268,8 @@
         border-left: 5px solid var(--event-color, #9aa7b8);
         background: color-mix(in srgb, var(--event-color, #d7eaff) 30%, white);
       }
-      .more-events { display:block; width:100%; border:0; padding:4px 3px 2px; background:transparent; color:#5c6380; font:inherit; font-size:11px; text-align:left; cursor:pointer; }
-      .more-events:hover { color:#5148b8; text-decoration:underline; }
+      .more-events { display:block; width:100%; border:0; padding:4px 3px 2px; background:transparent; color:#dc2626; font:inherit; font-size:11px; font-weight:700; text-align:left; cursor:pointer; }
+      .more-events:hover { color:#991b1b; text-decoration:underline; }
       .day-event-list { display:grid; gap:8px; margin-top:10px; text-align:left; }
       .day-event-choice { width:100%; border:1px solid #e6e5f1; border-left:6px solid var(--event-color,#9aa7b8); border-radius:11px; padding:9px 10px; background:#fff; color:#334155; font-family:inherit; text-align:left; cursor:pointer; }
       .weekend { color: #e45469; }
@@ -893,7 +893,7 @@
               d >= new Date(a.getFullYear(), a.getMonth(), a.getDate()) &&
               d <= new Date(b.getFullYear(), b.getMonth(), b.getDate())
             );
-          });
+          }).sort(compareCalendarEquipment);
           html += `<div class="day ${d.getMonth() !== month.getMonth() ? "muted" : ""} ${d.getDay()===0||d.getDay()===6?"weekend":""}"><div class="daynum">${d.getDate()}</div>${ev
             .slice(0, 4)
             .map(
@@ -911,17 +911,23 @@
         const d=new Date(v);
         return isNaN(d)?"":d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",hour12:false});
       }
+      function calendarEquipmentKey(e){
+        return String(e.equipment||e.assetCode||e.title||"").trim();
+      }
+      function compareCalendarEquipment(a,b){
+        return calendarEquipmentKey(a).localeCompare(calendarEquipmentKey(b),"th",{numeric:true,sensitivity:"base"}) ||
+          String(a.id||"").localeCompare(String(b.id||""),"th",{numeric:true,sensitivity:"base"});
+      }
       function calendarEventTitle(e,day){
-        const a=new Date(e.start),b=new Date(e.end),name=e.equipment||e.title||"-";
-        if(e.status==="คืนแล้ว")return `${name} : คืนแล้ว`;
-        if(e.status==="อุปกรณ์ชำรุด")return `${name} : คืนแล้ว (ชำรุด)`;
-        if(sameLocalDay(a,b))return `${name} : ${localTime(a)}–${localTime(b)}`;
-        if(sameLocalDay(day,a))return `${name} : รับ ${localTime(a)}`;
-        if(sameLocalDay(day,b))return `${name} : คืน ${localTime(b)}`;
-        return `${name} : อยู่ระหว่างยืม`;
+        const name=e.equipment||e.title||"-",status=String(e.status||"");
+        if(status==="รออนุมัติ")return `${name} : รออนุมัติ`;
+        if(status==="อนุมัติแล้ว")return `${name} : อนุมัติ`;
+        if(status==="รับอุปกรณ์แล้ว")return `${name} : อยู่ระหว่างยืม`;
+        if(["คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(status))return `${name} : คืนแล้ว`;
+        return `${name} : ${status||"-"}`;
       }
       function showDayEvents(raw){
-        const list=JSON.parse(raw);
+        const list=JSON.parse(raw).sort(compareCalendarEquipment);
         const html=`<div class="day-event-list">${list.map((e,i)=>`<button type="button" class="day-event-choice" style="--event-color:${esc(e.color||"#9ecff5")}" onclick="openDayEvent(decodeURIComponent('${encodeURIComponent(JSON.stringify(e))}'))">${esc(calendarEventTitle(e,new Date(e.start)))}<br><small>${esc(e.borrower||"")} · ${esc(e.id||"")}</small></button>`).join("")}</div>`;
         Swal.fire({title:`รายการทั้งหมด ${list.length} รายการ`,html,width:620,showConfirmButton:false,showCloseButton:true});
       }
@@ -938,7 +944,7 @@
             ? "s-ok"
             : s === "รับอุปกรณ์แล้ว"
               ? "s-out"
-              : ["คืนแล้ว","อุปกรณ์ชำรุด"].includes(s)
+              : ["คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(s)
                 ? "s-done"
                 : "s-no";
       }
@@ -1114,7 +1120,7 @@
       }
       async function setStatus(id, s) {
         if (!s) return;
-        const needs=["ไม่อนุมัติ","คืนแล้ว","อุปกรณ์ชำรุด"].includes(s);
+        const needs=["ไม่อนุมัติ","คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(s);
         const ask=await Swal.fire({
           icon:"question",title:"ยืนยันเปลี่ยนสถานะ",text:id+" → "+s,
           input:needs?"textarea":undefined,inputLabel:needs?"หมายเหตุ / เหตุผล":"",inputPlaceholder:"กรอกรายละเอียด...",
