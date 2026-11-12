@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="application-version" content="V20" />
+    <meta name="application-version" content="V20.1" />
     <link rel="icon" href="data:," />
-    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V.20</title>
+    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V.20.1</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
@@ -502,7 +502,7 @@
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
         <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿</div>
-        <div class="sub">© 2026 IT Booking Com System. V.20</div>
+        <div class="sub">© 2026 IT Booking Com System. V.20.1</div>
       </div>
       <div id="who"></div>
     </header>
@@ -636,8 +636,8 @@
         </div>
       </div>
     </div>
-    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V.20</div>
-    <script src="config.js?v=20"></script>
+    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V.20.1</div>
+    <script src="config.js?v=20.1"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
         month = new Date(),
@@ -650,6 +650,7 @@
       const $ = (s) => document.querySelector(s),
         $$ = (s) => [...document.querySelectorAll(s)];
       let pendingRequests = 0;
+      const inflightApi = new Map();
       function server(fn, ...args) {
         showSpin(1);
         return apiCall(fn, args)
@@ -670,6 +671,8 @@
             new Error("กรุณาตั้งค่า API_URL ในไฟล์ config.js ก่อนใช้งาน"),
           );
         const packed = JSON.stringify(args);
+        const requestKey = action + ":" + packed;
+        if (inflightApi.has(requestKey)) return inflightApi.get(requestKey);
         const jsonpActions = [
           "getInitialData",
           "getCalendarEvents",
@@ -679,10 +682,12 @@
           "searchBookings",
           "login",
         ].includes(action);
-        if (!jsonpActions || packed.length > 7000) {
-          return postApi(url, action, args, 0);
-        }
-        return jsonpApi(url, action, packed, 2);
+        const request = (!jsonpActions || packed.length > 7000)
+          ? postApi(url, action, args, 0)
+          : jsonpApi(url, action, packed, 1);
+        const tracked = request.finally(() => inflightApi.delete(requestKey));
+        inflightApi.set(requestKey, tracked);
+        return tracked;
       }
       function jsonpApi(url, action, packed, retries) {
         return new Promise((resolve, reject) => {
@@ -695,7 +700,7 @@
             } else {
               finish(new Error("ระบบตอบกลับช้าเกินไป กรุณาลองอีกครั้ง"));
             }
-          }, 45000);
+          }, 30000);
           function finish(err, value) {
             clearTimeout(timer);
             delete window[cb];
@@ -731,7 +736,7 @@
       }
       async function postApi(url, action, args, retries) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 25000);
+        const timer = setTimeout(() => controller.abort(), 45000);
         try {
           const response = await fetch(url, {
             method: "POST",
@@ -801,19 +806,19 @@
       };
       async function init() {
         let cachedInitial = null;
-        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV20") || localStorage.getItem("eqInitialDataV19") || "null"); } catch (_) {}
+        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV20_1") || localStorage.getItem("eqInitialDataV20") || localStorage.getItem("eqInitialDataV19") || "null"); } catch (_) {}
         if (cachedInitial && cachedInitial.data) {
           DATA = cachedInitial.data;
           applyInitialData();
           apiCall("getInitialData", []).then(data => {
             DATA = data;
-            localStorage.setItem("eqInitialDataV20", JSON.stringify({data, savedAt:Date.now()}));
+            localStorage.setItem("eqInitialDataV20_1", JSON.stringify({data, savedAt:Date.now()}));
             applyInitialData();
           }).catch(()=>{});
           return;
         }
         DATA = await server("getInitialData");
-        localStorage.setItem("eqInitialDataV20", JSON.stringify({data:DATA, savedAt:Date.now()}));
+        localStorage.setItem("eqInitialDataV20_1", JSON.stringify({data:DATA, savedAt:Date.now()}));
         applyInitialData();
       }
       function applyInitialData() {
@@ -850,7 +855,7 @@
       async function loadCalendar() {
         let a = new Date(month.getFullYear(), month.getMonth(), 1),
           b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
-        const cacheKey=`eqCalendarV20:${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,"0")}`;
+        const cacheKey=`eqCalendarV20_1:${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,"0")}`;
         let hasCache=false;
         try { const cached=JSON.parse(localStorage.getItem(cacheKey)||"null"); if(cached&&Array.isArray(cached.events)){events=cached.events;hasCache=true;renderCalendar();} } catch(_) {}
         showSpin(1);
@@ -922,7 +927,7 @@
         const name=e.equipment||e.title||"-",status=String(e.status||"");
         if(status==="รออนุมัติ")return `${name} : รออนุมัติ`;
         if(status==="อนุมัติแล้ว")return `${name} : อนุมัติ`;
-        if(status==="รับอุปกรณ์แล้ว")return `${name} : ระหว่างยืม`;
+        if(status==="รับอุปกรณ์แล้ว")return `${name} : อยู่ระหว่างยืม`;
         if(["คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(status))return `${name} : คืนแล้ว`;
         return `${name} : ${status||"-"}`;
       }
@@ -1065,8 +1070,8 @@
           $("#username").value,
           $("#password").value,
         );
-        if (r.version !== "V20") {
-          throw new Error("หน้าเว็บเป็น V20 แต่ API ยังไม่ใช่ V20 กรุณา Deploy Code.gs เวอร์ชันใหม่");
+        if (r.version !== "V20.1") {
+          throw new Error("หน้าเว็บเป็น V20.1 แต่ API ยังไม่ใช่ V20.1 กรุณา Deploy Code.gs เวอร์ชันใหม่");
         }
         token = r.token;
         user = r;
@@ -1112,10 +1117,16 @@
           renderRows(ADMIN.bookings, "#adminResults", true);
           renderAdmin();
         } catch (e) {
-          token = "";
-          user = null;
-          localStorage.clear();
-          refreshUser();
+          if (/เซสชันหมดอายุ|เข้าสู่ระบบใหม่/.test(String(e&&e.message||e))) {
+            token = "";
+            user = null;
+            localStorage.removeItem("eqToken");
+            localStorage.removeItem("eqUser");
+            refreshUser();
+          } else if (!silent) {
+            await notice("เชื่อมต่อข้อมูลผู้ดูแลไม่สำเร็จชั่วคราว ข้อมูลเข้าสู่ระบบยังถูกเก็บไว้ กรุณากดลองใหม่", "warning");
+          }
+          return null;
         }
       }
       async function setStatus(id, s) {
@@ -1136,7 +1147,7 @@
         await loadCalendar();
       }
       function clearLocalCalendarCache(){
-        for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith("eqCalendarV20:"))localStorage.removeItem(key);}
+        for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&(key.startsWith("eqCalendarV20:")||key.startsWith("eqCalendarV20_1:")))localStorage.removeItem(key);}
       }
       async function openPassword() {
         const r=await Swal.fire({
@@ -1236,7 +1247,7 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV20",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV20_1",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function renderEquipmentCategories(){
         const select=$("#bookingCategory"),current=select.value;
         const categories=(DATA.categories||[]).filter(Boolean);
@@ -1365,7 +1376,21 @@
       function tablePage(key,n,target){const s=tableStates[key];s.page=Math.max(1,s.page+n);refreshDataTable(target,key)}
       function exportRows(key){const s=tableStates[key],rows=filterTableRows(s.rows,s.q).sort((a,b)=>(String(a._sortValue||a.created_at||a.booking_id||"").localeCompare(String(b._sortValue||b.created_at||b.booking_id||""),"th"))*(s.sort==="asc"?1:-1));downloadCsv(key+".csv",rows)}
       function downloadCsv(name,rows){if(!rows.length)return notice("ไม่มีข้อมูลสำหรับส่งออก","warning");const keys=Object.keys(rows[0]).filter(k=>typeof rows[0][k]!=="object"&&!k.startsWith("_")),cell=v=>`"${String(v??"").replaceAll('"','""')}"`,csv="\uFEFF"+keys.map(cell).join(",")+"\n"+rows.map(r=>keys.map(k=>cell(r[k])).join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
-      async function reloadAdminAndPublic(){ADMIN=null;adminLoadedAt=0;publicBookingsCache={rows:[],loadedAt:0};await Promise.all([loadAdmin(),refreshInitialData()]);}
+      async function reloadAdminAndPublic(){
+        ADMIN=null;adminLoadedAt=0;publicBookingsCache={rows:[],loadedAt:0};
+        await loadAdmin();
+        if(!ADMIN)return;
+        publicBookingsCache={rows:ADMIN.bookings||[],loadedAt:Date.now()};
+        const activeEquipment=(ADMIN.equipment||[]).filter(x=>truth(x.active));
+        DATA=Object.assign({},DATA,{
+          equipment:activeEquipment.filter(x=>String(x.availability_status)==="พร้อมใช้งาน"),
+          categories:[...new Set(activeEquipment.map(x=>String(x.category||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th")),
+          departments:ADMIN.departments||DATA.departments||[],
+          summary:ADMIN.summary||DATA.summary||{}
+        });
+        localStorage.setItem("eqInitialDataV20_1",JSON.stringify({data:DATA,savedAt:Date.now()}));
+        applyInitialData();
+      }
       function esc(v) {
         return String(v ?? "").replace(
           /[&<>'"]/g,
