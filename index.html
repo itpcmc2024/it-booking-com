@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="application-version" content="V20.1" />
+    <meta name="application-version" content="V20.2" />
     <link rel="icon" href="data:," />
-    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V.20.1</title>
+    <title>ระบบยืมคอมพิวเตอร์และอุปกรณ์ · V.20.2</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap"
@@ -282,6 +282,9 @@
       .dashboard-strip .stat:nth-child(3) { background:#fff0c7; border-color:#ffe39a; }
       .dashboard-strip .stat:nth-child(4) { background:#dceeff; border-color:#c4e1fb; }
       .dashboard-strip .stat:nth-child(5) { background:#ffdfe9; border-color:#ffc8d9; }
+      .dashboard-strip .stat.clickable { border:1px solid transparent; cursor:pointer; font:inherit; color:inherit; text-align:left; transition:.18s ease; }
+      .dashboard-strip .stat.clickable:hover { transform:translateY(-2px); box-shadow:0 8px 20px #7772a824; }
+      .dashboard-strip .stat.clickable.active { outline:3px solid #8f88df55; border-color:#8f88df; }
       .detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 18px; margin-top:14px; }
       .detail-item { background:#f8f8ff; border:1px solid #eceafa; border-radius:13px; padding:10px 12px; }
       .detail-item.full { grid-column:1/-1; }
@@ -502,7 +505,7 @@
       <div>
         <div class="brand" id="brand">ระบบยืมอุปกรณ์</div>
         <div class="sub">จองง่าย ตรวจสอบสะดวก พร้อมใช้งานทุกวัน 🌿</div>
-        <div class="sub">© 2026 IT Booking Com System. V.20.1</div>
+        <div class="sub">© 2026 IT Booking Com System. V.20.2</div>
       </div>
       <div id="who"></div>
     </header>
@@ -605,7 +608,7 @@
           <div class="sub attention-text">ครั้งแรกใช้ admin / admin123 และควรเปลี่ยนทันที</div>
         </div>
         <div id="adminBox" style="display: none">
-          <div class="dashboard-strip public-dashboard"></div>
+          <div class="dashboard-strip" id="adminDashboard"></div>
           <div class="card">
             <div class="calendar-head">
               <div><h2 class="title" style="margin-bottom:2px">ศูนย์จัดการระบบ</h2><span class="sub" id="adminRole"></span></div>
@@ -636,13 +639,14 @@
         </div>
       </div>
     </div>
-    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V.20.1</div>
-    <script src="config.js?v=20.1"></script>
+    <div class="version-stamp" aria-label="เวอร์ชันระบบ">V.20.2</div>
+    <script src="config.js?v=20.2"></script>
     <script>
       let DATA = { equipment: [], departments: [] },
         month = new Date(),
         events = [],
         ADMIN = null,
+        adminDashboardFilter = "all",
         adminLoadedAt = 0,
         publicBookingsCache = { rows: [], loadedAt: 0 },
         token = localStorage.getItem("eqToken") || "",
@@ -806,19 +810,19 @@
       };
       async function init() {
         let cachedInitial = null;
-        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV20_1") || localStorage.getItem("eqInitialDataV20") || localStorage.getItem("eqInitialDataV19") || "null"); } catch (_) {}
+        try { cachedInitial = JSON.parse(localStorage.getItem("eqInitialDataV20_2") || localStorage.getItem("eqInitialDataV20_1") || localStorage.getItem("eqInitialDataV20") || "null"); } catch (_) {}
         if (cachedInitial && cachedInitial.data) {
           DATA = cachedInitial.data;
           applyInitialData();
           apiCall("getInitialData", []).then(data => {
             DATA = data;
-            localStorage.setItem("eqInitialDataV20_1", JSON.stringify({data, savedAt:Date.now()}));
+            localStorage.setItem("eqInitialDataV20_2", JSON.stringify({data, savedAt:Date.now()}));
             applyInitialData();
           }).catch(()=>{});
           return;
         }
         DATA = await server("getInitialData");
-        localStorage.setItem("eqInitialDataV20_1", JSON.stringify({data:DATA, savedAt:Date.now()}));
+        localStorage.setItem("eqInitialDataV20_2", JSON.stringify({data:DATA, savedAt:Date.now()}));
         applyInitialData();
       }
       function applyInitialData() {
@@ -855,7 +859,7 @@
       async function loadCalendar() {
         let a = new Date(month.getFullYear(), month.getMonth(), 1),
           b = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59);
-        const cacheKey=`eqCalendarV20_1:${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,"0")}`;
+        const cacheKey=`eqCalendarV20_2:${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,"0")}`;
         let hasCache=false;
         try { const cached=JSON.parse(localStorage.getItem(cacheKey)||"null"); if(cached&&Array.isArray(cached.events)){events=cached.events;hasCache=true;renderCalendar();} } catch(_) {}
         showSpin(1);
@@ -928,7 +932,8 @@
         if(status==="รออนุมัติ")return `${name} : รออนุมัติ`;
         if(status==="อนุมัติแล้ว")return `${name} : อนุมัติ`;
         if(status==="รับอุปกรณ์แล้ว")return `${name} : อยู่ระหว่างยืม`;
-        if(["คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(status))return `${name} : คืนแล้ว`;
+        if(status==="คืนล่าช้า")return `${name} : คืนล่าช้า`;
+        if(["คืนแล้ว","อุปกรณ์ชำรุด"].includes(status))return `${name} : คืนแล้ว`;
         return `${name} : ${status||"-"}`;
       }
       function showDayEvents(raw){
@@ -949,7 +954,9 @@
             ? "s-ok"
             : s === "รับอุปกรณ์แล้ว"
               ? "s-out"
-              : ["คืนแล้ว","คืนล่าช้า","อุปกรณ์ชำรุด"].includes(s)
+              : s === "คืนล่าช้า"
+                ? "s-wait"
+              : ["คืนแล้ว","อุปกรณ์ชำรุด"].includes(s)
                 ? "s-done"
                 : "s-no";
       }
@@ -1057,9 +1064,26 @@
         renderRows(rows, "#results", false);
       }
       function renderRows(rows, target, admin) {
-        renderDataTable(target,rows,admin?"admin-bookings":"public-bookings",(pageRows) => pageRows.length
-          ? `<div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>ผู้ยืม</th><th>อุปกรณ์</th><th>ช่วงยืม</th><th>สถานะ</th>${admin ? "<th>ดำเนินการ</th>" : ""}</tr></thead><tbody>${pageRows.map((r) => `<tr><td><b>${esc(r.booking_id)}</b><br><span class="sub">${esc(r.department || "")}</span></td><td>${esc(r.borrower_name)}<br><span class="sub">${esc(r.phone || "")}</span></td><td>${esc(r.equipment || "-")}</td><td>${fmt(r.borrow_datetime)}<br>${fmt(r.return_datetime)}</td><td>${badge(r.status)}</td>${admin ? `<td><select onchange="setStatus('${esc(r.booking_id)}',this.value)"><option value="">เปลี่ยนสถานะ</option>${DATA.statuses.map((s) => `<option>${s}</option>`).join("")}</select></td>` : ""}</tr>`).join("")}</tbody></table></div>`
+        const shown=admin?rows.filter(adminBookingMatches):rows;
+        renderDataTable(target,shown,admin?"admin-bookings":"public-bookings",(pageRows) => pageRows.length
+          ? `<div class="table-wrap"><table><thead><tr><th>เลขที่</th><th>ผู้ยืม</th><th>อุปกรณ์</th><th>ช่วงยืม</th><th>สถานะ</th>${admin ? "<th>ดำเนินการ</th>" : ""}</tr></thead><tbody>${pageRows.map((r) => `<tr><td><b>${esc(r.booking_id)}</b><br><span class="sub">${esc(r.department || "")}</span></td><td>${esc(r.borrower_name)}<br><span class="sub">${esc(r.phone || "")}</span></td><td>${esc(r.equipment || "-")}</td><td>${fmt(r.borrow_datetime)}<br>${fmt(r.return_datetime)}</td><td>${badge(r.status)}</td>${admin ? `<td><button class="mini-btn edit" onclick="editBooking('${esc(r.booking_id)}')">แก้ไข</button><select onchange="setStatus('${esc(r.booking_id)}',this.value)"><option value="">เปลี่ยนสถานะ</option>${DATA.statuses.map((s) => `<option>${s}</option>`).join("")}</select></td>` : ""}</tr>`).join("")}</tbody></table></div>`
           : '<div class="empty">ไม่พบข้อมูล</div>');
+      }
+      function adminBookingMatches(r){
+        if(adminDashboardFilter==="all")return true;
+        if(adminDashboardFilter==="waiting")return r.status==="รออนุมัติ";
+        if(adminDashboardFilter==="borrowing")return r.status==="รับอุปกรณ์แล้ว";
+        if(adminDashboardFilter==="late")return r.status==="คืนล่าช้า";
+        if(adminDashboardFilter==="due"){
+          const d=new Date(r.return_datetime),now=new Date();
+          return r.status==="รับอุปกรณ์แล้ว"&&d>now&&sameLocalDay(d,now);
+        }
+        return true;
+      }
+      function setAdminDashboardFilter(filter){
+        adminDashboardFilter=filter||"all";
+        renderAdminDashboard();
+        if(ADMIN)renderRows(ADMIN.bookings||[],"#adminResults",true);
       }
       async function login() {
         const button = document.querySelector("#loginBox button");
@@ -1070,8 +1094,8 @@
           $("#username").value,
           $("#password").value,
         );
-        if (r.version !== "V20.1") {
-          throw new Error("หน้าเว็บเป็น V20.1 แต่ API ยังไม่ใช่ V20.1 กรุณา Deploy Code.gs เวอร์ชันใหม่");
+        if (r.version !== "V20.2") {
+          throw new Error("หน้าเว็บเป็น V20.2 แต่ API ยังไม่ใช่ V20.2 กรุณา Deploy Code.gs เวอร์ชันใหม่");
         }
         token = r.token;
         user = r;
@@ -1114,6 +1138,7 @@
           adminLoadedAt=Date.now();
           $("#adminRole").textContent="เข้าสู่ระบบโดย "+(user?.name||"")+" · สิทธิ์ "+ADMIN.role;
           $$(".admin-only").forEach(x=>x.style.display=ADMIN.role==="ADMIN"?"":"none");
+          renderAdminDashboard();
           renderRows(ADMIN.bookings, "#adminResults", true);
           renderAdmin();
         } catch (e) {
@@ -1146,8 +1171,40 @@
         await reloadAdminAndPublic();
         await loadCalendar();
       }
+      function dateTimeLocalValue(value){
+        const d=new Date(value);if(isNaN(d))return "";
+        const p=n=>String(n).padStart(2,"0");
+        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+      }
+      async function editBooking(id){
+        const b=(ADMIN&&ADMIN.bookings||[]).find(x=>String(x.booking_id)===String(id));if(!b)return;
+        if(["คืนแล้ว","ไม่อนุมัติ","ยกเลิก","อุปกรณ์ชำรุด"].includes(String(b.status)))return notice("รายการนี้ปิดงานแล้ว จึงไม่สามารถแก้ไขข้อมูลคำขอได้","warning");
+        const depOptions=(ADMIN.departments||DATA.departments||[]).filter(x=>truth(x.active)||String(b.department)===String(x.department_name)).map(x=>`<option value="${esc(x.department_name)}" ${String(b.department)===String(x.department_name)?"selected":""}>${esc(x.department_name)}</option>`).join("");
+        const equipmentOptions=(ADMIN.equipment||[]).filter(x=>truth(x.active)||String(x.equipment_id)===String(b.equipment_id)).map(x=>{
+          const current=String(x.equipment_id)===String(b.equipment_id),available=String(x.availability_status)==="พร้อมใช้งาน";
+          return `<option value="${esc(x.equipment_id)}" ${current?"selected":""} ${!current&&!available?"disabled":""}>${esc(x.equipment_name)}${x.asset_code?` (${esc(x.asset_code)})`:""} — ${esc(current?"รายการปัจจุบัน":x.availability_status||"")}</option>`;
+        }).join("");
+        const html=`<div class="grid" style="text-align:left">
+          <div><label>ผู้ยืม *</label><input class="swal-field" name="borrowerName" value="${esc(b.borrower_name||"")}"></div>
+          <div><label>ตำแหน่ง</label><input class="swal-field" name="position" value="${esc(b.position||"")}"></div>
+          <div><label>หน่วยงาน *</label><select class="swal-field" name="department"><option value="">เลือกหน่วยงาน</option>${depOptions}</select></div>
+          <div><label>เบอร์โทร *</label><input class="swal-field" name="phone" value="${esc(b.phone||"")}"></div>
+          <div><label>อีเมล</label><input class="swal-field" name="email" type="email" value="${esc(b.email||"")}"></div>
+          <div><label>สถานที่ใช้งาน</label><input class="swal-field" name="location" value="${esc(b.usage_location||"")}"></div>
+          <div><label>เริ่มยืม *</label><input class="swal-field" name="borrowDateTime" type="datetime-local" value="${dateTimeLocalValue(b.borrow_datetime)}"></div>
+          <div><label>กำหนดคืน *</label><input class="swal-field" name="returnDateTime" type="datetime-local" value="${dateTimeLocalValue(b.return_datetime)}"></div>
+          <div class="full"><label>อุปกรณ์ *</label><select class="swal-field" name="equipmentId">${equipmentOptions}</select></div>
+          <div class="full"><label>วัตถุประสงค์ *</label><textarea class="swal-field" name="purpose">${esc(b.purpose||"")}</textarea></div>
+          <div class="full"><label>หมายเหตุ</label><textarea class="swal-field" name="note">${esc(b.note||"")}</textarea></div>
+        </div>`;
+        const ask=await Swal.fire({title:"แก้ไขคำขอ "+id,width:820,html,showCancelButton:true,confirmButtonText:"บันทึกการแก้ไข",cancelButtonText:"ยกเลิก",confirmButtonColor:"#8f88df",preConfirm:()=>{const d=swalData();if(!d.borrowerName||!d.department||!d.phone||!d.purpose||!d.borrowDateTime||!d.returnDateTime||!d.equipmentId)return Swal.showValidationMessage("กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบ");if(new Date(d.returnDateTime)<=new Date(d.borrowDateTime))return Swal.showValidationMessage("วันเวลาคืนต้องมากกว่าวันเวลาเริ่มยืม");return Object.assign(d,{bookingId:id});}});
+        if(!ask.isConfirmed)return;
+        await server("updateBooking",token,ask.value);clearLocalCalendarCache();
+        await notice("แก้ไขคำขอ "+id+" และปรับปรุงปฏิทินแล้ว","success");
+        await reloadAdminAndPublic();await loadCalendar();
+      }
       function clearLocalCalendarCache(){
-        for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&(key.startsWith("eqCalendarV20:")||key.startsWith("eqCalendarV20_1:")))localStorage.removeItem(key);}
+        for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key&&key.startsWith("eqCalendarV20"))localStorage.removeItem(key);}
       }
       async function openPassword() {
         const r=await Swal.fire({
@@ -1163,9 +1220,19 @@
         await notice("เปลี่ยนรหัสผ่านสำเร็จ");
       }
       function renderAdmin(){
-        const s=ADMIN.summary||{};
         if(ADMIN.role!=="ADMIN")return;
         renderEquipmentAdmin();renderDepartmentAdmin();renderUserAdmin();renderSettings();renderLogs();
+      }
+      function renderAdminDashboard(){
+        const el=$("#adminDashboard");if(!el||!ADMIN)return;
+        const s=ADMIN.summary||{},cards=[
+          ["all","📋","คำขอทั้งหมด",(ADMIN.bookings||[]).length],
+          ["waiting","⏳","รออนุมัติ",s.waiting||0],
+          ["borrowing","📦","กำลังยืม",s.borrowing||0],
+          ["due","🕒","ที่ต้องคืนวันนี้",s.due||0],
+          ["late","⚠️","คืนล่าช้า",s.late||0]
+        ];
+        el.innerHTML=cards.map(x=>`<button type="button" class="stat clickable ${adminDashboardFilter===x[0]?"active":""}" onclick="setAdminDashboardFilter('${x[0]}')"><span>${x[1]} ${x[2]}</span><b>${x[3]}</b></button>`).join("");
       }
       function adminTable(headers,rows){
         return rows.length?`<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`:'<div class="empty">ยังไม่มีข้อมูล</div>';
@@ -1182,7 +1249,7 @@
       async function equipmentForm(i){
         const e=i===undefined?{}:ADMIN.equipment[i];
         const conditionOptions=selectOptions(["ปกติ","ตำหนิ"],e.condition||"ปกติ");
-        const statusOptions=selectOptions(["พร้อมใช้งาน","ไม่พร้อมใช้งาน"],e.availability_status||"พร้อมใช้งาน");
+        const statusOptions=selectOptions(["พร้อมใช้งาน","ไม่พร้อมใช้งาน","รอคืน"],e.availability_status||"พร้อมใช้งาน");
         const locationOptions=selectOptions(["งานสารสนเทศ","งานโครงข่าย"],e.current_location||"");
         const selectedAccessories=String(e.default_accessories||"").split(",").map(x=>x.trim()).filter(Boolean);
         const accessoryOptions=["เมาส์","คีย์บอร์ด","สะพานไฟ","สาย HDMI"].map(x=>`<label class="swal-check-option"><input type="checkbox" class="swal-accessory" value="${esc(x)}" ${selectedAccessories.includes(x)?"checked":""}><span>${esc(x)}</span></label>`).join("");
@@ -1247,7 +1314,7 @@
         const r=await Swal.fire({icon:"warning",title:active?"เปิดใช้งานข้อมูลนี้?":"ระงับการใช้งาน?",text:id,showCancelButton:true,confirmButtonText:"ยืนยัน",cancelButtonText:"ยกเลิก",confirmButtonColor:active?"#75bea9":"#ef7898"});if(!r.isConfirmed)return;
         await server("toggleMaster",token,type,id,active);await notice(active?"เปิดใช้งานแล้ว":"ระงับการใช้งานแล้ว");await reloadAdminAndPublic();
       }
-      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV20_1",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
+      async function refreshInitialData(){DATA=await server("getInitialData");localStorage.setItem("eqInitialDataV20_2",JSON.stringify({data:DATA,savedAt:Date.now()}));$("#brand").textContent=DATA.systemName;renderPublicDashboard();renderEquipmentCategories();$("#department").innerHTML='<option value="">เลือกหน่วยงาน</option>'+DATA.departments.map(d=>`<option>${esc(d.department_name)}</option>`).join("");renderAvailableEquipment([]);}
       function renderEquipmentCategories(){
         const select=$("#bookingCategory"),current=select.value;
         const categories=(DATA.categories||[]).filter(Boolean);
@@ -1388,7 +1455,7 @@
           departments:ADMIN.departments||DATA.departments||[],
           summary:ADMIN.summary||DATA.summary||{}
         });
-        localStorage.setItem("eqInitialDataV20_1",JSON.stringify({data:DATA,savedAt:Date.now()}));
+        localStorage.setItem("eqInitialDataV20_2",JSON.stringify({data:DATA,savedAt:Date.now()}));
         applyInitialData();
       }
       function esc(v) {
